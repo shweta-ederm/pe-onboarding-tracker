@@ -275,6 +275,15 @@
       return now !== el.dataset.initial;
     }
 
+    // Reordering counts as an unsaved change too, so the save bar has to
+    // know about the row order as well as the cell values.
+    var orderInput = document.querySelector('[data-task-order]');
+    function rowIds() {
+      return Array.prototype.slice.call(grid.querySelectorAll('[data-row]'))
+        .map(function (r) { return r.getAttribute('data-row'); });
+    }
+    var initialOrder = rowIds();
+
     function refreshGrid() {
       var dirtyRows = {};
 
@@ -285,10 +294,27 @@
         if (isChanged(el)) dirtyRows[id] = true;
       });
 
+      var order = rowIds();
+      var moved = order.join(',') !== initialOrder.join(',');
+
+      // Every row that is no longer where it started is a pending change.
+      var movedIds = {};
+      if (moved) {
+        order.forEach(function (id, i) {
+          if (initialOrder[i] !== id) { movedIds[id] = true; dirtyRows[id] = true; }
+        });
+      }
+
       // Mark the rows themselves so the change is visible in place.
       grid.querySelectorAll('[data-row]').forEach(function (row) {
-        row.classList.toggle('is-dirty', !!dirtyRows[row.getAttribute('data-row')]);
+        var id = row.getAttribute('data-row');
+        row.classList.toggle('is-dirty', !!dirtyRows[id] && !movedIds[id]);
+        row.classList.toggle('is-moved', !!movedIds[id]);
       });
+
+      if (orderInput) {
+        orderInput.value = moved ? order.join(',') : '';
+      }
 
       var n = Object.keys(dirtyRows).length;
       savebar.classList.toggle('is-clean', n === 0);
@@ -312,6 +338,11 @@
         } else {
           el.value = el.dataset.initial;
         }
+      });
+      // Put the rows back where they started as well.
+      initialOrder.forEach(function (id) {
+        var row = grid.querySelector('[data-row="' + id + '"]');
+        if (row) grid.appendChild(row);
       });
       refreshGrid();
     });
@@ -343,6 +374,95 @@
       });
     }
 
+    // --- drag a row by its handle to reorder ------------------------
+    if (grid.hasAttribute('data-sortable')) {
+      var dragging = null;
+
+      function clearMarks() {
+        grid.querySelectorAll('.drop-above, .drop-below').forEach(function (r) {
+          r.classList.remove('drop-above', 'drop-below');
+        });
+      }
+
+      // Rows are only draggable while the handle is held, so text in the
+      // inputs stays selectable the rest of the time.
+      grid.querySelectorAll('.drag-handle').forEach(function (handle) {
+        var row = handle.closest('[data-row]');
+        if (!row) return;
+        handle.addEventListener('mousedown', function () { row.draggable = true; });
+        row.addEventListener('mouseup', function () { row.draggable = false; });
+      });
+
+      grid.addEventListener('dragstart', function (ev) {
+        var row = ev.target.closest && ev.target.closest('[data-row]');
+        if (!row || !row.draggable) { ev.preventDefault(); return; }
+        dragging = row;
+        row.classList.add('dragging');
+        ev.dataTransfer.effectAllowed = 'move';
+        try { ev.dataTransfer.setData('text/plain', row.getAttribute('data-row')); } catch (e) {}
+      });
+
+      grid.addEventListener('dragover', function (ev) {
+        if (!dragging) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        clearMarks();
+        var over = ev.target.closest && ev.target.closest('[data-row]');
+        if (!over || over === dragging) return;
+        var box = over.getBoundingClientRect();
+        over.classList.add((ev.clientY - box.top) > box.height / 2 ? 'drop-below' : 'drop-above');
+      });
+
+      grid.addEventListener('drop', function (ev) {
+        if (!dragging) return;
+        ev.preventDefault();
+        var over = ev.target.closest && ev.target.closest('[data-row]');
+        if (over && over !== dragging) {
+          var box = over.getBoundingClientRect();
+          var after = (ev.clientY - box.top) > box.height / 2;
+          over.parentNode.insertBefore(dragging, after ? over.nextSibling : over);
+        }
+        clearMarks();
+        refreshGrid();
+      });
+
+      grid.addEventListener('dragend', function () {
+        if (dragging) {
+          dragging.classList.remove('dragging');
+          dragging.draggable = false;
+        }
+        dragging = null;
+        clearMarks();
+        refreshGrid();
+      });
+
+      // With JavaScript on, the arrows move the row in place instead of
+      // posting and reloading, so pending edits are never thrown away.
+      // They are also the keyboard and touch path, where dragging is not
+      // available.
+      grid.addEventListener('click', function (ev) {
+        var btn = ev.target.closest && ev.target.closest('[data-move]');
+        if (!btn) return;
+        ev.preventDefault();
+
+        var row = btn.closest('[data-row]');
+        if (!row) return;
+        var dir = btn.getAttribute('data-move');
+
+        if (dir === 'up') {
+          var prev = row.previousElementSibling;
+          if (prev && prev.hasAttribute('data-row')) row.parentNode.insertBefore(row, prev);
+        } else {
+          var next = row.nextElementSibling;
+          if (next && next.hasAttribute('data-row')) row.parentNode.insertBefore(next, row);
+        }
+
+        refreshGrid();
+        var again = row.querySelector('[data-move="' + dir + '"]');
+        if (again) again.focus();
+      });
+    }
+
     // Buttons that reload the page would throw away pending edits.
     document.addEventListener('submit', function (ev) {
       var form = ev.target;
@@ -361,6 +481,53 @@
     }, true);
 
     refreshGrid();
+  }
+
+  // ---------------------------------------------------------------
+  // Practice detail: one product at a time
+  //
+  // Every product is rendered, and this shows one. With JavaScript off
+  // they all stay visible, which is the old scrolling behaviour rather
+  // than a broken page.
+  // ---------------------------------------------------------------
+
+  var productTabs = document.querySelector('[data-product-tabs]');
+
+  if (productTabs) {
+    var blocks = document.querySelectorAll('.prod-block[data-product]');
+    var tabs = productTabs.querySelectorAll('[data-tab]');
+    // Remember the choice per practice for the length of the session.
+    var memoryKey = 'pot-product-' + (location.search.match(/[?&]id=(\d+)/) || [])[1];
+
+    function showProduct(which) {
+      blocks.forEach(function (b) {
+        b.hidden = !(which === 'all' || b.getAttribute('data-product') === which);
+      });
+      tabs.forEach(function (t) {
+        t.classList.toggle('on', t.getAttribute('data-tab') === which);
+        t.setAttribute('aria-selected', t.getAttribute('data-tab') === which ? 'true' : 'false');
+      });
+      // Selections made under another tab would be invisible but still submit.
+      var checked = document.querySelectorAll('.bulk-check:checked');
+      if (checked.length) {
+        checked.forEach(function (c) { c.checked = false; });
+        var bar = document.getElementById('bulkbar');
+        if (bar) bar.hidden = true;
+      }
+      try { sessionStorage.setItem(memoryKey, which); } catch (e) {}
+    }
+
+    productTabs.addEventListener('click', function (ev) {
+      var tab = ev.target.closest('[data-tab]');
+      if (tab) showProduct(tab.getAttribute('data-tab'));
+    });
+
+    var remembered = null;
+    try { remembered = sessionStorage.getItem(memoryKey); } catch (e) {}
+    var valid = remembered && (remembered === 'all' ||
+      document.querySelector('.prod-block[data-product="' + remembered + '"]'));
+
+    showProduct(valid ? remembered : (tabs.length ? tabs[0].getAttribute('data-tab') : 'all'));
   }
 
   // ---------------------------------------------------------------

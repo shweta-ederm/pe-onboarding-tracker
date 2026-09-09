@@ -55,6 +55,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   product_id   INT UNSIGNED NOT NULL,
   category_id  INT UNSIGNED NOT NULL,
+  -- Whoever normally picks this task up. A practice task with no
+  -- assignee of its own falls back to this one.
+  default_assignee_id INT UNSIGNED DEFAULT NULL,
   name         VARCHAR(200) NOT NULL,
   description  TEXT DEFAULT NULL,
   sort_order   INT NOT NULL DEFAULT 0,
@@ -64,8 +67,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   PRIMARY KEY (id),
   KEY ix_tasks_product (product_id, sort_order, id),
   KEY ix_tasks_category (category_id),
+  KEY ix_tasks_default_assignee (default_assignee_id),
   CONSTRAINT fk_tasks_product  FOREIGN KEY (product_id)  REFERENCES products (id)   ON DELETE CASCADE,
-  CONSTRAINT fk_tasks_category FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE RESTRICT
+  CONSTRAINT fk_tasks_category FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_tasks_default_assignee FOREIGN KEY (default_assignee_id) REFERENCES assignees (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------

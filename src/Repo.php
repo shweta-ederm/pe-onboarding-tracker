@@ -19,6 +19,14 @@ final class Repo
     /** The per-row status, defaulting when no practice_tasks row exists. */
     private const ST = "COALESCE(pt.status,'not_started')";
 
+    /**
+     * The effective assignee: whoever is set on this practice's copy of
+     * the task, otherwise the task's default owner. Changing the default
+     * in the task library therefore moves every practice that has not
+     * picked someone of its own, with nothing copied or duplicated.
+     */
+    private const ASG = 'COALESCE(pt.assignee_id, t.default_assignee_id)';
+
     /** Reusable aggregate columns for any progress rollup. */
     private static function aggCols(): string
     {
@@ -120,10 +128,12 @@ final class Repo
 
         return Database::all(
             'SELECT t.*, p.name AS product_name, p.sort_order AS product_sort,
-                    c.name AS category_name, c.sort_order AS category_sort
+                    c.name AS category_name, c.sort_order AS category_sort,
+                    da.name AS default_assignee_name
                FROM tasks t
-               JOIN products p   ON p.id = t.product_id
-               JOIN categories c ON c.id = t.category_id
+               JOIN products p    ON p.id = t.product_id
+               JOIN categories c  ON c.id = t.category_id
+               LEFT JOIN assignees da ON da.id = t.default_assignee_id
               WHERE ' . implode(' AND ', $where) . '
               ORDER BY p.sort_order, p.name, t.sort_order, t.id',
             $args
@@ -379,11 +389,13 @@ final class Repo
             $where[] = "{$st} = :status";
             $args['status'] = (string) $f['status'];
         }
+        $asg = self::ASG;
+
         if (!empty($f['assignee_id'])) {
             if ($f['assignee_id'] === 'none') {
-                $where[] = 'pt.assignee_id IS NULL';
+                $where[] = "{$asg} IS NULL";
             } else {
-                $where[] = 'pt.assignee_id = :assignee_id';
+                $where[] = "{$asg} = :assignee_id";
                 $args['assignee_id'] = (int) $f['assignee_id'];
             }
         }
@@ -404,14 +416,18 @@ final class Repo
                     p.id AS product_id, p.name AS product_name, p.sort_order AS product_sort,
                     c.id AS category_id, c.name AS category_name, c.sort_order AS category_sort,
                     {$st} AS status,
-                    pt.id AS state_id, pt.assignee_id, pt.due_date, pt.notes, pt.updated_at,
+                    pt.id AS state_id,
+                    {$asg} AS assignee_id,
+                    pt.assignee_id AS assignee_override,
+                    t.default_assignee_id,
+                    pt.due_date, pt.notes, pt.updated_at,
                     a.name AS assignee_name
                FROM practice_products pp
                JOIN products p             ON p.id = pp.product_id AND p.is_active = 1
                JOIN tasks t                ON t.product_id = p.id AND t.is_active = 1
                JOIN categories c           ON c.id = t.category_id
                LEFT JOIN practice_tasks pt ON pt.practice_id = pp.practice_id AND pt.task_id = t.id
-               LEFT JOIN assignees a       ON a.id = pt.assignee_id
+               LEFT JOIN assignees a       ON a.id = {$asg}
               WHERE " . implode(' AND ', $where) . "
               ORDER BY p.sort_order, p.name, c.sort_order, c.name, t.sort_order, t.id",
             $args
@@ -528,11 +544,13 @@ final class Repo
             $where[] = "{$st} = :status";
             $args['status'] = (string) $f['status'];
         }
+        $asg = self::ASG;
+
         if (!empty($f['assignee_id'])) {
             if ($f['assignee_id'] === 'none') {
-                $where[] = 'pt.assignee_id IS NULL';
+                $where[] = "{$asg} IS NULL";
             } else {
-                $where[] = 'pt.assignee_id = :assignee_id';
+                $where[] = "{$asg} = :assignee_id";
                 $args['assignee_id'] = (int) $f['assignee_id'];
             }
         }
@@ -556,7 +574,8 @@ final class Repo
                     p.id AS product_id, p.name AS product_name,
                     c.id AS category_id, c.name AS category_name,
                     {$st} AS status,
-                    pt.assignee_id, pt.due_date, pt.notes, pt.updated_at,
+                    {$asg} AS assignee_id,
+                    pt.due_date, pt.notes, pt.updated_at,
                     a.name AS assignee_name
                FROM practices pr
                JOIN practice_products pp   ON pp.practice_id = pr.id
@@ -564,7 +583,7 @@ final class Repo
                JOIN tasks t                ON t.product_id = p.id AND t.is_active = 1
                JOIN categories c           ON c.id = t.category_id
                LEFT JOIN practice_tasks pt ON pt.practice_id = pr.id AND pt.task_id = t.id
-               LEFT JOIN assignees a       ON a.id = pt.assignee_id
+               LEFT JOIN assignees a       ON a.id = {$asg}
               WHERE " . implode(' AND ', $where) . "
               ORDER BY pr.name, p.sort_order, c.sort_order, t.sort_order, t.id
               LIMIT {$limit}",
@@ -688,18 +707,23 @@ final class Repo
     /** Fetch one derived task row after a write, for the JSON response. */
     public static function taskStateRow(int $practiceId, int $taskId): array
     {
-        $st = self::ST;
+        $st  = self::ST;
+        $asg = self::ASG;
         $row = Database::one(
             "SELECT t.id AS task_id, t.name AS task_name,
                     p.id AS product_id, p.name AS product_name,
                     c.id AS category_id, c.name AS category_name,
-                    {$st} AS status, pt.assignee_id, pt.due_date, pt.notes, pt.updated_at,
+                    {$st} AS status,
+                    {$asg} AS assignee_id,
+                    pt.assignee_id AS assignee_override,
+                    t.default_assignee_id,
+                    pt.due_date, pt.notes, pt.updated_at,
                     a.name AS assignee_name
                FROM tasks t
                JOIN products p   ON p.id = t.product_id
                JOIN categories c ON c.id = t.category_id
                LEFT JOIN practice_tasks pt ON pt.practice_id = :pid AND pt.task_id = t.id
-               LEFT JOIN assignees a       ON a.id = pt.assignee_id
+               LEFT JOIN assignees a       ON a.id = {$asg}
               WHERE t.id = :tid",
             ['pid' => $practiceId, 'tid' => $taskId]
         );

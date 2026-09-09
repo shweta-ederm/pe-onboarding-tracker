@@ -10,6 +10,7 @@
  * @var int    $product_id
  * @var ?array $product
  * @var array  $categories
+ * @var array  $assignees
  * @var array  $rows
  * @var bool   $include_inactive
  */
@@ -58,6 +59,14 @@ $page_title = 'Task library';
         <?php endforeach; ?>
       </select></label>
 
+    <label class="field"><span>Default assignee</span>
+      <select name="default_assignee_id">
+        <option value="">Nobody by default</option>
+        <?php foreach ($assignees as $a): ?>
+          <option value="<?= (int) $a['id'] ?>"><?= e($a['name']) ?></option>
+        <?php endforeach; ?>
+      </select></label>
+
     <label class="field f-grow"><span>Description</span>
       <input type="text" name="description" maxlength="500" placeholder="Optional detail shown under the task name"></label>
 
@@ -88,27 +97,42 @@ $page_title = 'Task library';
 <form method="post" action="<?= e(url('tasks-save-all')) ?>" id="gridform">
   <?= Csrf::field() ?>
   <input type="hidden" name="product_id" value="<?= $product_id ?>">
+  <!-- Filled in by the drag handler with the task ids in their new order.
+       Left empty when nothing has been reordered. -->
+  <input type="hidden" name="task_order" value="" data-task-order>
 </form>
 
-<div class="edit-rows cols-task" data-grid>
+<p class="table-note" style="margin-bottom:.6rem">
+  Drag a row by its handle to reorder, or use the arrows. The new order is applied when you save,
+  along with any other edits.
+</p>
+
+<div class="edit-rows cols-task" data-grid data-sortable>
   <div class="edit-head">
-    <span>Move</span><span>Task</span><span>Category</span><span>Description</span><span class="ta-c">Active</span>
+    <span>Move</span><span>Task</span><span>Category</span><span>Default assignee</span><span>Description</span><span class="ta-c">Active</span>
   </div>
 
   <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
     <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>">
       <span class="cell cell-move">
+        <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
+
+        <?php /* The arrows are the keyboard and touch path, and the fallback
+                 when JavaScript is off. With JavaScript on they reorder the
+                 row in place instead of reloading the page. */ ?>
         <form method="post" action="<?= e(url('task-move')) ?>" class="inline-form" data-leaves-page>
           <?= Csrf::field() ?>
           <input type="hidden" name="id" value="<?= $id ?>">
           <input type="hidden" name="dir" value="up">
-          <button type="submit" class="btn btn-icon" title="Move up" aria-label="Move <?= e($r['name']) ?> up">↑</button>
+          <button type="submit" class="btn btn-icon" data-move="up"
+                  title="Move up" aria-label="Move <?= e($r['name']) ?> up">↑</button>
         </form>
         <form method="post" action="<?= e(url('task-move')) ?>" class="inline-form" data-leaves-page>
           <?= Csrf::field() ?>
           <input type="hidden" name="id" value="<?= $id ?>">
           <input type="hidden" name="dir" value="down">
-          <button type="submit" class="btn btn-icon" title="Move down" aria-label="Move <?= e($r['name']) ?> down">↓</button>
+          <button type="submit" class="btn btn-icon" data-move="down"
+                  title="Move down" aria-label="Move <?= e($r['name']) ?> down">↓</button>
         </form>
       </span>
 
@@ -122,6 +146,17 @@ $page_title = 'Task library';
             <?php foreach ($categories as $c): ?>
               <option value="<?= (int) $c['id'] ?>" <?= ((int) $r['category_id'] === (int) $c['id']) ? 'selected' : '' ?>>
                 <?= e($c['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select></label>
+
+        <label class="cell"><span class="cell-lab">Default assignee</span>
+          <select form="gridform" name="rows[<?= $id ?>][default_assignee_id]">
+            <option value="">Nobody by default</option>
+            <?php foreach ($assignees as $a): ?>
+              <option value="<?= (int) $a['id'] ?>"
+                <?= ((int) ($r['default_assignee_id'] ?? 0) === (int) $a['id']) ? 'selected' : '' ?>>
+                <?= e($a['name']) ?>
               </option>
             <?php endforeach; ?>
           </select></label>
@@ -164,6 +199,12 @@ $page_title = 'Task library';
 </div>
 
 <?php require APP_ROOT . '/templates/partials/savebar.php'; ?>
+
+<p class="table-note">
+  A default assignee is who normally picks the task up. Any practice that has not chosen someone
+  of its own shows that person, so changing it here moves every one of them at once. Setting an
+  assignee on a specific practice overrides the default for that practice only.
+</p>
 
 <p class="table-note">
   Deactivate rather than delete when a task is simply no longer part of the process. Deleting

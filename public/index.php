@@ -80,6 +80,7 @@ function grid_cast(string $type, $raw)
     $v = is_string($raw) ? trim($raw) : $raw;
     switch ($type) {
         case 'int':     return (int) $v;
+        case 'intnull': return ($v === '' || $v === null) ? null : (int) $v;
         case 'bool':    return !empty($v) ? 1 : 0;
         case 'strnull': return ($v === '' || $v === null) ? null : (string) $v;
         case 'str':
@@ -518,21 +519,72 @@ if ($method === 'POST') {
             $productId = (int) ($_POST['product_id'] ?? 0);
             $rows      = (array) ($_POST['rows'] ?? []);
 
-            // A task may only be moved to a category that exists.
+            // A task may only be moved to a category that exists, and only
+            // be defaulted to somebody who exists.
             $validCats = array_map(static fn($c) => (int) $c['id'], Repo::categories());
+            $validPpl  = array_map(static fn($a) => (int) $a['id'], Repo::assignees());
+
             foreach ($rows as $id => $vals) {
                 if (isset($vals['category_id']) && !in_array((int) $vals['category_id'], $validCats, true)) {
                     unset($rows[$id]['category_id']);
                 }
+                if (isset($vals['default_assignee_id'])) {
+                    $v = trim((string) $vals['default_assignee_id']);
+                    if ($v === '') {
+                        $rows[$id]['default_assignee_id'] = null;
+                    } elseif (!in_array((int) $v, $validPpl, true)) {
+                        unset($rows[$id]['default_assignee_id']);
+                    }
+                }
             }
 
             $r = save_grid('tasks', 'task', [
-                'name'        => 'str',
-                'category_id' => 'int',
-                'description' => 'strnull',
-                'is_active'   => 'bool',
+                'name'                => 'str',
+                'category_id'         => 'int',
+                'default_assignee_id' => 'intnull',
+                'description'         => 'strnull',
+                'is_active'           => 'bool',
             ], $rows);
-            grid_flash($r, 'task');
+
+            // Persist a drag-and-drop reorder, if there was one. The order
+            // arrives as task ids; anything not listed keeps its place at
+            // the end, and ids from another product are ignored.
+            $orderRaw = trim((string) ($_POST['task_order'] ?? ''));
+            if ($orderRaw !== '' && $productId > 0) {
+                $current = array_map(
+                    static fn($x) => (int) $x['id'],
+                    Database::all('SELECT id FROM tasks WHERE product_id = :pid ORDER BY sort_order, id',
+                        ['pid' => $productId])
+                );
+                $wanted = array_values(array_intersect(
+                    array_values(array_unique(array_map('intval', explode(',', $orderRaw)))),
+                    $current
+                ));
+                $final = array_merge($wanted, array_values(array_diff($current, $wanted)));
+
+                if ($final !== $current) {
+                    $pdo = Database::pdo();
+                    $pdo->beginTransaction();
+                    try {
+                        $n = 0;
+                        foreach ($final as $taskId) {
+                            $n += 10;
+                            Database::run('UPDATE tasks SET sort_order = :so WHERE id = :id',
+                                ['so' => $n, 'id' => $taskId]);
+                        }
+                        $pdo->commit();
+                        $r['changed']++;
+                        Activity::log('task', 'reorder', null, null, null, 'sort_order', null, null,
+                            'Task order changed for ' . (Repo::product($productId)['name'] ?? 'a product'));
+                    } catch (Throwable $ex) {
+                        $pdo->rollBack();
+                        error_log('task reorder failed: ' . $ex->getMessage());
+                        flash('The task order could not be saved.', 'error');
+                    }
+                }
+            }
+
+            grid_flash($r, 'change');
             redirect(url('admin/tasks', ['product_id' => $productId ?: null]));
         }
 
@@ -679,6 +731,11 @@ if ($method === 'POST') {
             $desc   = post_str('description') ?: null;
             $active = !empty($_POST['is_active']) ? 1 : 0;
 
+            $defaultAssignee = post_int_or_null('default_assignee_id');
+            if ($defaultAssignee !== null && !Repo::assignee($defaultAssignee)) {
+                $defaultAssignee = null;
+            }
+
             if ($id > 0) {
                 $old = Repo::task($id);
                 if (!$old) {
@@ -696,9 +753,12 @@ if ($method === 'POST') {
                 flash('Task updated everywhere it appears.');
             } else {
                 Database::run(
-                    'INSERT INTO tasks (product_id, category_id, name, description, sort_order, is_active)
-                     VALUES (:product_id, :category_id, :name, :description, :sort_order, 1)',
-                    ['product_id' => $productId, 'category_id' => $categoryId, 'name' => $name,
+                    'INSERT INTO tasks (product_id, category_id, default_assignee_id,
+                                        name, description, sort_order, is_active)
+                     VALUES (:product_id, :category_id, :default_assignee_id,
+                             :name, :description, :sort_order, 1)',
+                    ['product_id' => $productId, 'category_id' => $categoryId,
+                     'default_assignee_id' => $defaultAssignee, 'name' => $name,
                      'description' => $desc, 'sort_order' => Repo::nextTaskSort($productId)]
                 );
                 $newId = Database::lastId();
@@ -1075,6 +1135,7 @@ switch ($route) {
             'product_id'       => $productId,
             'product'          => $productId ? Repo::product($productId) : null,
             'categories'       => Repo::categories(),
+            'assignees'        => Repo::assignees(),
             'rows'             => $productId
                                     ? Repo::tasks(['product_id' => $productId, 'include_inactive' => $includeInactive])
                                     : [],

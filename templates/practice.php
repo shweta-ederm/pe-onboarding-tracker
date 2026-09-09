@@ -138,6 +138,22 @@ $filter_page = 'practice';
 require APP_ROOT . '/templates/partials/filter_bar.php';
 ?>
 
+<?php if (count($grouped) > 1): ?>
+  <nav class="tabs" data-product-tabs aria-label="Products">
+    <?php foreach ($grouped as $g):
+        $pr = $by_product[$g['product_id']]['rollup'] ?? Repo::rollup($g['tasks']);
+        $needs = ((int) $pr['blocked'] > 0 || (int) $pr['overdue'] > 0);
+    ?>
+      <button type="button" class="tab" data-tab="<?= (int) $g['product_id'] ?>">
+        <?= e($g['product_name']) ?>
+        <span class="tab-n"><?= (int) $pr['progress'] ?>%</span>
+        <?php if ($needs): ?><span class="tab-flag" title="Blocked or overdue work"></span><?php endif; ?>
+      </button>
+    <?php endforeach; ?>
+    <button type="button" class="tab" data-tab="all">All products</button>
+  </nav>
+<?php endif; ?>
+
 <?php if ($filtered): ?>
   <p class="filter-note">
     Showing <?= (int) $shown ?> of <?= (int) $rollup['total'] ?> tasks. The progress figures above always reflect every task.
@@ -169,7 +185,7 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
   <?php foreach ($grouped as $g):
       $r = $by_product[$g['product_id']]['rollup'] ?? Repo::rollup($g['tasks']);
   ?>
-    <section class="prod-block">
+    <section class="prod-block" data-product="<?= (int) $g['product_id'] ?>">
       <header class="prod-head">
         <h3><?= e($g['product_name']) ?></h3>
         <div class="prod-progress" data-rollup-product="<?= (int) $g['product_id'] ?>">
