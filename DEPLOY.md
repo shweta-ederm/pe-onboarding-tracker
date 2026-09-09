@@ -27,22 +27,43 @@ Make the GitHub repo **private**. `.gitignore` already excludes
 `config/config.php`, so your database password never reaches GitHub. Keep it
 that way.
 
-### 2. Decide where it lives on the server
+### 2. Where it lives on the server
 
-**Option A, a subdomain (cleaner, recommended).** In cPanel → Domains, create
-`onboarding.yourdomain.com` and set its document root to:
+**Chosen: a subfolder**, serving the app at `https://yourdomain.com/onboarding`.
+Deploy target:
 
 ```
-/home/USERNAME/onboarding/public
+/home/USERNAME/public_html/onboarding
 ```
 
-Only `public/` is web-reachable. `src/`, `config/`, `templates/`, `db/`, and
-`tools/` sit outside the web root where nobody can request them.
+The root `.htaccess` forwards every request that is not a real file into
+`public/`, so `/public/` never appears in the URL. The `.htaccess` file in each
+of `src/`, `config/`, `templates/`, `db/`, and `tools/` denies direct access.
 
-**Option B, a subfolder** (`https://yourdomain.com/onboarding`). Deploy to
-`/home/USERNAME/public_html/onboarding`. The `.htaccess` files in each
-non-public folder deny direct access, and the root `.htaccess` forwards
-requests into `public/`. This works, but Option A is structurally safer.
+Two things are worth knowing about this layout. First, protection of the source
+folders comes from Apache config rather than from directory structure, so it is
+worth running the checks at the end of this document once. Second, even if
+those deny rules were ignored, a request for a `.php` file would execute it
+rather than print it, and every file under `src/` only defines classes, so
+nothing would be disclosed. The files that would genuinely leak as plain text
+are the `.sql`, `.md`, and `.yml` ones, which is why the root `.htaccess` blocks
+those extensions outright as a second layer.
+
+**If you later want the safer structure**, create the subdomain
+`onboarding.yourdomain.com` with its document root set to
+`/home/USERNAME/onboarding/public`, change `DEPLOYPATH` in `.cpanel.yml` to
+`/home/USERNAME/onboarding`, and redeploy. Nothing in the application code has
+to change.
+
+### 2b. Set the PHP version
+
+cPanel → **Select PHP Version**. GoDaddy still defaults some accounts to PHP
+7.4, and this application needs **8.0 or newer**. Pick 8.1 or 8.2.
+
+While you are on that screen, confirm the `pdo_mysql` extension is ticked. It
+normally is. If PHP is too old the app says so in plain language rather than
+failing with a blank page, so this is easy to spot later, but setting it now
+saves a confusing first load.
 
 ### 3. Clone the repo in cPanel
 
@@ -61,11 +82,13 @@ live site.
 Edit `.cpanel.yml` and change the one marked line:
 
 ```yaml
-- export DEPLOYPATH=/home/USERNAME/onboarding
+- export DEPLOYPATH=/home/USERNAME/public_html/onboarding
 ```
 
-Use the path from step 2, with your real cPanel username. Commit and push that
-change.
+Replace `USERNAME` with your real cPanel username, which is shown in cPanel's
+General Information panel. Commit and push that change before deploying, since
+cPanel reads `.cpanel.yml` from the server's copy of the repository, not from
+your machine.
 
 > cPanel only runs `.cpanel.yml` if the repository is on the branch you have
 > checked out and the file is valid YAML. Two spaces of indentation, no tabs.
@@ -139,9 +162,14 @@ manually so it is not applied twice later.
 
 ## Checks worth doing once
 
-- Visit `/src/Repo.php` and `/config/config.sample.php` directly in a browser.
-  Both must return 403 or 404. If either downloads as text, the `.htaccess`
-  files are not being honoured and you should switch to the subdomain layout.
+- Visit these four URLs directly. Every one must return 403 or 404, and none
+  may show you file contents:
+  `/onboarding/db/schema.sql`, `/onboarding/README.md`,
+  `/onboarding/.cpanel.yml`, `/onboarding/config/config.sample.php`.
+  If any of them downloads or displays, `.htaccess` is not being honoured on
+  this account and you should move to the subdomain layout described in step 2.
+- Visit `/onboarding/public/index.php` directly. It will work, which is
+  expected and harmless; it is the same application at a second URL.
 - Confirm the site loads over `https://`. The session cookie is only marked
   Secure when the request is HTTPS, so serving the app over plain HTTP weakens
   the admin session. Force HTTPS in cPanel.
