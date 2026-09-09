@@ -61,6 +61,38 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
+/**
+ * Anything uncaught would otherwise reach the browser as a bare
+ * "HTTP ERROR 500" with no clue what happened and nothing on screen to
+ * act on. Log the detail for diagnosis, show the person something
+ * civil, and give them a way back.
+ */
+set_exception_handler(static function (Throwable $ex): void {
+    error_log(sprintf(
+        'Uncaught %s: %s in %s:%d',
+        get_class($ex),
+        $ex->getMessage(),
+        $ex->getFile(),
+        $ex->getLine()
+    ));
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: text/html; charset=utf-8');
+    }
+
+    // Deliberately plain: the stylesheet may be the thing that is broken.
+    echo '<!doctype html><meta charset="utf-8"><title>Something went wrong</title>'
+       . '<div style="font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;'
+       . 'max-width:34rem;margin:5rem auto;padding:0 1.5rem;color:#1C1C22">'
+       . '<h1 style="font-size:1.25rem;margin:0 0 .5rem">Something went wrong</h1>'
+       . '<p style="color:#55555F">That action could not be completed. Nothing was changed.</p>'
+       . '<p style="color:#55555F">The details were written to the server error log, which you can '
+       . 'read in cPanel under Metrics, then Errors.</p>'
+       . '<p><a href="index.php?p=dashboard" style="color:#0284C7">Back to the dashboard</a></p>'
+       . '</div>';
+});
+
 // ---------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------

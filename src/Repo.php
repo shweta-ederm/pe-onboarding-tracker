@@ -235,8 +235,10 @@ final class Repo
             $args['state'] = (string) $f['state'];
         }
         if (!empty($f['q'])) {
-            $where[] = '(pr.name LIKE :q OR pr.location LIKE :q)';
-            $args['q'] = '%' . $f['q'] . '%';
+            // Native prepared statements will not accept the same named
+            // placeholder twice, so each occurrence gets its own name.
+            $where[] = '(pr.name LIKE :q1 OR pr.location LIKE :q2)';
+            $args['q1'] = $args['q2'] = '%' . $f['q'] . '%';
         }
         if (!empty($f['product_id'])) {
             $where[] = 'EXISTS (SELECT 1 FROM practice_products x
@@ -393,8 +395,8 @@ final class Repo
                         AND {$st} NOT IN ('completed','not_applicable')";
         }
         if (!empty($f['q'])) {
-            $where[] = '(t.name LIKE :q OR pt.notes LIKE :q)';
-            $args['q'] = '%' . $f['q'] . '%';
+            $where[] = '(t.name LIKE :q1 OR pt.notes LIKE :q2)';
+            $args['q1'] = $args['q2'] = '%' . $f['q'] . '%';
         }
 
         $rows = Database::all(
@@ -542,8 +544,8 @@ final class Repo
                         AND {$st} NOT IN ('completed','not_applicable')";
         }
         if (!empty($f['q'])) {
-            $where[] = '(t.name LIKE :q OR pt.notes LIKE :q OR pr.name LIKE :q)';
-            $args['q'] = '%' . $f['q'] . '%';
+            $where[] = '(t.name LIKE :q1 OR pt.notes LIKE :q2 OR pr.name LIKE :q3)';
+            $args['q1'] = $args['q2'] = $args['q3'] = '%' . $f['q'] . '%';
         }
 
         $limit = max(1, min(5000, $limit));

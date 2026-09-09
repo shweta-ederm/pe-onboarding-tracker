@@ -762,44 +762,53 @@ if ($method === 'POST') {
             if (!$t) {
                 not_found('That task does not exist.');
             }
+            $productId = (int) $t['product_id'];
 
-            // Swap sort_order with the adjacent task in the same product.
-            $neighbour = $dir === 'up'
-                ? Database::one(
-                    'SELECT id, sort_order FROM tasks
-                      WHERE product_id = :pid AND is_active = 1
-                        AND (sort_order < :so OR (sort_order = :so AND id < :id))
-                      ORDER BY sort_order DESC, id DESC LIMIT 1',
-                    ['pid' => (int) $t['product_id'], 'so' => (int) $t['sort_order'], 'id' => $id]
+            // Read the product's tasks in their current order, swap the
+            // one being moved with its neighbour, then renumber the whole
+            // list in tens. Renumbering avoids the tie-breaking problems
+            // that come from nudging individual sort_order values, and it
+            // keeps the numbers tidy for free.
+            //
+            // Deactivated tasks are included so the stored order stays
+            // consistent. If one is hidden between two visible tasks, a
+            // move can take two clicks rather than one.
+            $ids = array_map(
+                static fn($r) => (int) $r['id'],
+                Database::all(
+                    'SELECT id FROM tasks WHERE product_id = :pid ORDER BY sort_order, id',
+                    ['pid' => $productId]
                 )
-                : Database::one(
-                    'SELECT id, sort_order FROM tasks
-                      WHERE product_id = :pid AND is_active = 1
-                        AND (sort_order > :so OR (sort_order = :so AND id > :id))
-                      ORDER BY sort_order ASC, id ASC LIMIT 1',
-                    ['pid' => (int) $t['product_id'], 'so' => (int) $t['sort_order'], 'id' => $id]
-                );
+            );
 
-            if ($neighbour) {
+            $i = array_search($id, $ids, true);
+            $j = ($i === false) ? -1 : ($dir === 'up' ? $i - 1 : $i + 1);
+
+            if ($i !== false && $j >= 0 && $j < count($ids)) {
+                $tmp = $ids[$i];
+                $ids[$i] = $ids[$j];
+                $ids[$j] = $tmp;
+
                 $pdo = Database::pdo();
                 $pdo->beginTransaction();
                 try {
-                    Database::run('UPDATE tasks SET sort_order = :so WHERE id = :id',
-                        ['so' => (int) $neighbour['sort_order'], 'id' => $id]);
-                    Database::run('UPDATE tasks SET sort_order = :so WHERE id = :id',
-                        ['so' => (int) $t['sort_order'], 'id' => (int) $neighbour['id']]);
-                    // Identical sort_order values would leave the order ambiguous.
-                    if ((int) $neighbour['sort_order'] === (int) $t['sort_order']) {
-                        Database::run('UPDATE tasks SET sort_order = sort_order + 1 WHERE id = :id',
-                            ['id' => $dir === 'up' ? (int) $neighbour['id'] : $id]);
+                    $order = 0;
+                    foreach ($ids as $taskId) {
+                        $order += 10;
+                        Database::run(
+                            'UPDATE tasks SET sort_order = :so WHERE id = :id',
+                            ['so' => $order, 'id' => $taskId]
+                        );
                     }
                     $pdo->commit();
                 } catch (Throwable $ex) {
                     $pdo->rollBack();
+                    error_log('task-move failed: ' . $ex->getMessage());
                     flash('Could not reorder that task.', 'error');
                 }
             }
-            redirect(url('admin/tasks', ['product_id' => (int) $t['product_id']]));
+
+            redirect(url('admin/tasks', ['product_id' => $productId]));
         }
 
         case 'tasks-renumber': {
