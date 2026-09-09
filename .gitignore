@@ -1,0 +1,13 @@
+# Never commit real credentials. This file lives only on the server.
+config/config.php
+
+# The static preview is generated, large, and not part of the app.
+preview/
+
+*.log
+.DS_Store
+Thumbs.db
+
+# OneDrive artefacts
+~$*
+*.tmp

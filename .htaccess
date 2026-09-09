@@ -1,0 +1,50 @@
+# Root guard, for the subfolder layout (yourdomain.com/onboarding).
+#
+# The real entry point is public/index.php. These rules forward any
+# request that is not an existing file into public/, so the visible URL
+# stays https://yourdomain.com/onboarding/ with no /public/ in it.
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # If every page 404s, or you get a redirect loop, uncomment the next
+  # line and set it to the folder this app was deployed into.
+  # RewriteBase /onboarding/
+
+  # Requests already pointing inside public/ are served as-is. This is
+  # what stops the rules below from looping.
+  RewriteRule ^public/ - [L]
+
+  # The bare folder URL loads the front controller.
+  RewriteRule ^$ public/index.php [L]
+
+  # Everything else that is not a real file or directory goes to public/.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Belt and braces: never serve documentation, config samples, or SQL as
+# plain text, even if mod_rewrite is unavailable or the per-directory
+# .htaccess files are ignored. Applies to this folder and below.
+<FilesMatch "\.(md|ya?ml|sql|log|bak|sample\.php)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<Files ".gitignore">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</Files>

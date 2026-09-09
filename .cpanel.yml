@@ -1,0 +1,26 @@
+---
+deployment:
+  tasks:
+    # ---------------------------------------------------------------
+    # EDIT THIS ONE LINE ONLY.
+    #
+    # Replace USERNAME with your cPanel username. You can see it in
+    # cPanel, top right, or in the "General Information" panel.
+    #
+    # This is set up for the subfolder layout, serving the app at
+    # https://yourdomain.com/onboarding. If you rename the folder,
+    # change it here and in the RewriteBase comment in .htaccess.
+    # ---------------------------------------------------------------
+    - export DEPLOYPATH=/home/USERNAME/public_html/onboarding
+
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/mkdir -p $DEPLOYPATH/config
+    - /bin/cp -R src $DEPLOYPATH/
+    - /bin/cp -R templates $DEPLOYPATH/
+    - /bin/cp -R public $DEPLOYPATH/
+    - /bin/cp -R db $DEPLOYPATH/
+    - /bin/cp -R tools $DEPLOYPATH/
+    - /bin/cp config/config.sample.php $DEPLOYPATH/config/config.sample.php
+    - /bin/cp .htaccess $DEPLOYPATH/.htaccess
+    # config/config.php is deliberately never copied. It holds your
+    # database credentials and lives only on the server.
