@@ -2,16 +2,17 @@
 deployment:
   tasks:
     # ---------------------------------------------------------------
-    # EDIT THIS ONE LINE ONLY.
+    # Nothing here needs editing.
     #
-    # Replace USERNAME with your cPanel username. You can see it in
-    # cPanel, top right, or in the "General Information" panel.
+    # $HOME is your cPanel account's home folder, so this works without
+    # hardcoding a username. The app is served at
+    # https://yourdomain.com/onboarding
     #
-    # This is set up for the subfolder layout, serving the app at
-    # https://yourdomain.com/onboarding. If you rename the folder,
-    # change it here and in the RewriteBase comment in .htaccess.
+    # If a deploy ever fails saying the path does not exist, replace
+    # $HOME with the absolute path shown in cPanel's General Information
+    # panel, for example /home/abc123def.
     # ---------------------------------------------------------------
-    - export DEPLOYPATH=/home/USERNAME/public_html/onboarding
+    - export DEPLOYPATH=$HOME/public_html/onboarding
 
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/mkdir -p $DEPLOYPATH/config
