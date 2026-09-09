@@ -71,6 +71,131 @@ function read_filters(): array
 }
 
 // ---------------------------------------------------------------------
+// Saving a whole grid of admin rows at once
+// ---------------------------------------------------------------------
+
+/** Coerce one submitted grid cell to the right shape. */
+function grid_cast(string $type, $raw)
+{
+    $v = is_string($raw) ? trim($raw) : $raw;
+    switch ($type) {
+        case 'int':     return (int) $v;
+        case 'bool':    return !empty($v) ? 1 : 0;
+        case 'strnull': return ($v === '' || $v === null) ? null : (string) $v;
+        case 'str':
+        default:        return (string) $v;
+    }
+}
+
+/**
+ * Apply edits from an admin grid.
+ *
+ * Only fields that actually changed are written, so untouched rows cost
+ * nothing and the activity log stays readable. $fields is a fixed
+ * whitelist defined in code, never taken from the request, which is what
+ * makes interpolating the column names here safe.
+ *
+ * @param array<string,string> $fields column => type
+ * @return array{changed:int, skipped:array<string>}
+ */
+function save_grid(string $table, string $entity, array $fields, array $rows, array $required = ['name']): array
+{
+    $changed = 0;
+    $skipped = [];
+
+    foreach ($rows as $id => $vals) {
+        $id = (int) $id;
+        if ($id <= 0 || !is_array($vals)) {
+            continue;
+        }
+
+        $current = Database::one("SELECT * FROM {$table} WHERE id = :id", ['id' => $id]);
+        if (!$current) {
+            continue;
+        }
+
+        $label = (string) ($current['name'] ?? ('#' . $id));
+
+        // A blank required field means the row is skipped, not blanked out.
+        $blank = false;
+        foreach ($required as $req) {
+            if (array_key_exists($req, $vals) && trim((string) $vals[$req]) === '') {
+                $blank = true;
+            }
+        }
+        if ($blank) {
+            $skipped[] = $label;
+            continue;
+        }
+
+        $set = [];
+        $args = ['id' => $id];
+        $fieldsChanged = [];
+
+        foreach ($fields as $col => $type) {
+            if (!array_key_exists($col, $vals)) {
+                continue;
+            }
+            $new = grid_cast($type, $vals[$col]);
+            $old = $current[$col];
+
+            if ((string) $old === (string) $new) {
+                continue;
+            }
+            $set[] = "{$col} = :{$col}";
+            $args[$col] = $new;
+            $fieldsChanged[] = $col;
+        }
+
+        if (!$set) {
+            continue;
+        }
+
+        Database::run("UPDATE {$table} SET " . implode(', ', $set) . ' WHERE id = :id', $args);
+        $changed++;
+
+        $newLabel = isset($vals['name']) ? trim((string) $vals['name']) : $label;
+        Activity::log(
+            $entity,
+            'update',
+            $id,
+            null,
+            $entity === 'task' ? $id : null,
+            implode(', ', $fieldsChanged),
+            null,
+            null,
+            sprintf('%s updated: %s (%s)', ucfirst($entity), $newLabel, implode(', ', $fieldsChanged))
+        );
+    }
+
+    return ['changed' => $changed, 'skipped' => $skipped];
+}
+
+/** Turn a save_grid result into a message for the user. */
+function grid_flash(array $result, string $noun): void
+{
+    if (!empty($result['skipped'])) {
+        flash(sprintf(
+            'Skipped %s because the name was left blank: %s',
+            count($result['skipped']) === 1 ? 'one row' : count($result['skipped']) . ' rows',
+            implode(', ', $result['skipped'])
+        ), 'error');
+    }
+
+    if ($result['changed'] === 0 && empty($result['skipped'])) {
+        flash('Nothing had changed, so nothing was saved.');
+        return;
+    }
+    if ($result['changed'] > 0) {
+        flash(sprintf(
+            'Saved %d %s.',
+            $result['changed'],
+            $result['changed'] === 1 ? $noun : $noun . 's'
+        ));
+    }
+}
+
+// ---------------------------------------------------------------------
 // Guard: database reachable and installed
 // ---------------------------------------------------------------------
 
@@ -339,6 +464,76 @@ if ($method === 'POST') {
                 flash('Product deleted along with its task definitions.');
             }
             redirect(url('admin/products'));
+        }
+
+        // ---- Grid saves: one button for the whole table ----------------
+        case 'products-save-all': {
+            $r = save_grid('products', 'product', [
+                'sort_order'  => 'int',
+                'name'        => 'str',
+                'description' => 'strnull',
+                'is_active'   => 'bool',
+            ], (array) ($_POST['rows'] ?? []));
+            grid_flash($r, 'product');
+            redirect(url('admin/products'));
+        }
+
+        case 'categories-save-all': {
+            $r = save_grid('categories', 'category', [
+                'sort_order' => 'int',
+                'name'       => 'str',
+                'is_active'  => 'bool',
+            ], (array) ($_POST['rows'] ?? []));
+            grid_flash($r, 'category');
+            redirect(url('admin/categories'));
+        }
+
+        case 'assignees-save-all': {
+            // Reject bad addresses before touching the database.
+            $rows = (array) ($_POST['rows'] ?? []);
+            $bad  = [];
+            foreach ($rows as $id => $vals) {
+                $email = trim((string) ($vals['email'] ?? ''));
+                if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $bad[] = trim((string) ($vals['name'] ?? ('#' . (int) $id)));
+                    unset($rows[$id]);
+                }
+            }
+            if ($bad) {
+                flash('That email address does not look valid, so this row was left alone: '
+                      . implode(', ', $bad), 'error');
+            }
+
+            $r = save_grid('assignees', 'assignee', [
+                'name'       => 'str',
+                'role_title' => 'strnull',
+                'email'      => 'strnull',
+                'is_active'  => 'bool',
+            ], $rows);
+            grid_flash($r, 'person');
+            redirect(url('admin/assignees'));
+        }
+
+        case 'tasks-save-all': {
+            $productId = (int) ($_POST['product_id'] ?? 0);
+            $rows      = (array) ($_POST['rows'] ?? []);
+
+            // A task may only be moved to a category that exists.
+            $validCats = array_map(static fn($c) => (int) $c['id'], Repo::categories());
+            foreach ($rows as $id => $vals) {
+                if (isset($vals['category_id']) && !in_array((int) $vals['category_id'], $validCats, true)) {
+                    unset($rows[$id]['category_id']);
+                }
+            }
+
+            $r = save_grid('tasks', 'task', [
+                'name'        => 'str',
+                'category_id' => 'int',
+                'description' => 'strnull',
+                'is_active'   => 'bool',
+            ], $rows);
+            grid_flash($r, 'task');
+            redirect(url('admin/tasks', ['product_id' => $productId ?: null]));
         }
 
         // ---- Categories -----------------------------------------------

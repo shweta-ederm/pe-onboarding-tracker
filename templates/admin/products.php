@@ -1,10 +1,11 @@
 <?php
 /**
- * Admin: products, edited inline.
+ * Admin: products.
  *
- * Each row is its own <form>. A form cannot legally wrap table cells,
- * so these rows are CSS grid rather than a <table>. They also stack
- * cleanly on a phone this way.
+ * Every editable cell belongs to one form, declared empty just below and
+ * referenced by the HTML `form` attribute. That way a single Save button
+ * commits the whole table, and the per-row Remove buttons can stay as
+ * their own forms without illegally nesting inside it.
  *
  * @var array $rows
  */
@@ -35,48 +36,50 @@ $page_title = 'Products';
   </form>
 </section>
 
-<div class="edit-rows cols-product">
+<form method="post" action="<?= e(url('products-save-all')) ?>" id="gridform"><?= Csrf::field() ?></form>
+
+<div class="edit-rows cols-product" data-grid>
   <div class="edit-head">
     <span>Order</span><span>Name</span><span>Description</span>
-    <span class="ta-c">Tasks</span><span class="ta-c">Practices</span><span class="ta-c">Active</span><span></span>
+    <span class="ta-c">Tasks</span><span class="ta-c">Practices</span><span class="ta-c">Active</span>
   </div>
 
-  <?php foreach ($rows as $r): ?>
-    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>">
-      <form method="post" action="<?= e(url('product-save')) ?>" class="edit-row">
-        <?= Csrf::field() ?>
-        <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-
+  <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
+    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>">
+      <div class="edit-row">
         <label class="cell"><span class="cell-lab">Order</span>
-          <input type="number" name="sort_order" value="<?= (int) $r['sort_order'] ?>" step="10"></label>
+          <input form="gridform" type="number" step="10" name="rows[<?= $id ?>][sort_order]"
+                 value="<?= (int) $r['sort_order'] ?>"></label>
 
         <label class="cell"><span class="cell-lab">Name</span>
-          <input type="text" name="name" value="<?= e($r['name']) ?>" required maxlength="120"></label>
+          <input form="gridform" type="text" maxlength="120" name="rows[<?= $id ?>][name]"
+                 value="<?= e($r['name']) ?>"></label>
 
         <label class="cell"><span class="cell-lab">Description</span>
-          <input type="text" name="description" value="<?= e($r['description'] ?? '') ?>" maxlength="500"></label>
+          <input form="gridform" type="text" maxlength="500" name="rows[<?= $id ?>][description]"
+                 value="<?= e($r['description'] ?? '') ?>"></label>
 
         <span class="cell ta-c"><span class="cell-lab">Tasks</span>
-          <a href="<?= e(url('admin/tasks', ['product_id' => (int) $r['id']])) ?>"><?= (int) $r['task_count'] ?></a></span>
+          <a href="<?= e(url('admin/tasks', ['product_id' => $id])) ?>"><?= (int) $r['task_count'] ?></a></span>
 
         <span class="cell ta-c"><span class="cell-lab">Practices</span><?= (int) $r['practice_count'] ?></span>
 
         <label class="cell ta-c"><span class="cell-lab">Active</span>
-          <input type="checkbox" name="is_active" value="1" <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
-
-        <span class="cell cell-act">
-          <button type="submit" class="btn btn-quiet btn-xs">Save</button>
-        </span>
-      </form>
+          <input form="gridform" type="hidden" name="rows[<?= $id ?>][is_active]" value="0">
+          <input form="gridform" type="checkbox" name="rows[<?= $id ?>][is_active]" value="1"
+                 <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
+      </div>
 
       <form method="post" action="<?= e(url('product-delete')) ?>" class="edit-row-side"
             data-confirm="Remove <?= e($r['name']) ?>? If any practice uses it, it will be deactivated instead of deleted.">
         <?= Csrf::field() ?>
-        <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+        <input type="hidden" name="id" value="<?= $id ?>">
         <button type="submit" class="btn btn-danger btn-xs">Remove</button>
       </form>
     </div>
   <?php endforeach; ?>
 </div>
+
+<?php require APP_ROOT . '/templates/partials/savebar.php'; ?>
 
 <p class="table-note">Lower order numbers appear first. Leave gaps of ten so you can slot a product in between later.</p>

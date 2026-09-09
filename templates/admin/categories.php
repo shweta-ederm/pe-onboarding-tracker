@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin: task categories.
+ * Admin: task categories. One Save button for the whole table.
  * @var array $rows
  */
 $page_title = 'Categories';
@@ -26,37 +26,40 @@ $page_title = 'Categories';
   </form>
 </section>
 
-<div class="edit-rows cols-category">
+<form method="post" action="<?= e(url('categories-save-all')) ?>" id="gridform"><?= Csrf::field() ?></form>
+
+<div class="edit-rows cols-category" data-grid>
   <div class="edit-head">
-    <span>Order</span><span>Name</span><span class="ta-c">Tasks</span><span class="ta-c">Active</span><span></span>
+    <span>Order</span><span>Name</span><span class="ta-c">Tasks</span><span class="ta-c">Active</span>
   </div>
 
-  <?php foreach ($rows as $r): ?>
-    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>">
-      <form method="post" action="<?= e(url('category-save')) ?>" class="edit-row">
-        <?= Csrf::field() ?>
-        <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-
+  <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
+    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>">
+      <div class="edit-row">
         <label class="cell"><span class="cell-lab">Order</span>
-          <input type="number" name="sort_order" value="<?= (int) $r['sort_order'] ?>" step="10"></label>
+          <input form="gridform" type="number" step="10" name="rows[<?= $id ?>][sort_order]"
+                 value="<?= (int) $r['sort_order'] ?>"></label>
 
         <label class="cell"><span class="cell-lab">Name</span>
-          <input type="text" name="name" value="<?= e($r['name']) ?>" required maxlength="120"></label>
+          <input form="gridform" type="text" maxlength="120" name="rows[<?= $id ?>][name]"
+                 value="<?= e($r['name']) ?>"></label>
 
         <span class="cell ta-c"><span class="cell-lab">Tasks</span><?= (int) $r['task_count'] ?></span>
 
         <label class="cell ta-c"><span class="cell-lab">Active</span>
-          <input type="checkbox" name="is_active" value="1" <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
-
-        <span class="cell cell-act"><button type="submit" class="btn btn-quiet btn-xs">Save</button></span>
-      </form>
+          <input form="gridform" type="hidden" name="rows[<?= $id ?>][is_active]" value="0">
+          <input form="gridform" type="checkbox" name="rows[<?= $id ?>][is_active]" value="1"
+                 <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
+      </div>
 
       <form method="post" action="<?= e(url('category-delete')) ?>" class="edit-row-side"
             data-confirm="Remove <?= e($r['name']) ?>? If tasks use it, it will be deactivated instead of deleted.">
         <?= Csrf::field() ?>
-        <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+        <input type="hidden" name="id" value="<?= $id ?>">
         <button type="submit" class="btn btn-danger btn-xs">Remove</button>
       </form>
     </div>
   <?php endforeach; ?>
 </div>
+
+<?php require APP_ROOT . '/templates/partials/savebar.php'; ?>

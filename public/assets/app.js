@@ -245,6 +245,125 @@
   refreshBulk();
 
   // ---------------------------------------------------------------
+  // Admin grids: one Save button for the whole table
+  //
+  // Every editable cell reports to a single form. This watches for
+  // changes, counts the affected rows, and wakes the save bar up so a
+  // typed edit cannot be walked away from unnoticed. With JavaScript
+  // off, the Save button is simply always live and still works.
+  // ---------------------------------------------------------------
+
+  var grid = document.querySelector('[data-grid]');
+  var savebar = document.querySelector('[data-savebar]');
+
+  if (grid && savebar) {
+    var saveBtn = savebar.querySelector('[data-savebar-save]');
+    var resetBtn = savebar.querySelector('[data-savebar-reset]');
+    var barText = savebar.querySelector('[data-savebar-text]');
+
+    var fields = Array.prototype.slice.call(
+      grid.querySelectorAll('input[form], select[form], textarea[form]')
+    ).filter(function (el) { return el.type !== 'hidden'; });
+
+    // Remember how each cell started out.
+    fields.forEach(function (el) {
+      el.dataset.initial = (el.type === 'checkbox') ? String(el.checked) : el.value;
+    });
+
+    function isChanged(el) {
+      var now = (el.type === 'checkbox') ? String(el.checked) : el.value;
+      return now !== el.dataset.initial;
+    }
+
+    function refreshGrid() {
+      var dirtyRows = {};
+
+      fields.forEach(function (el) {
+        var row = el.closest('[data-row]');
+        if (!row) return;
+        var id = row.getAttribute('data-row');
+        if (isChanged(el)) dirtyRows[id] = true;
+      });
+
+      // Mark the rows themselves so the change is visible in place.
+      grid.querySelectorAll('[data-row]').forEach(function (row) {
+        row.classList.toggle('is-dirty', !!dirtyRows[row.getAttribute('data-row')]);
+      });
+
+      var n = Object.keys(dirtyRows).length;
+      savebar.classList.toggle('is-clean', n === 0);
+      saveBtn.disabled = n === 0;
+      resetBtn.hidden = n === 0;
+      barText.textContent = n === 0
+        ? 'No unsaved changes'
+        : (n === 1 ? '1 row edited, not saved yet' : n + ' rows edited, not saved yet');
+
+      window.POT_gridDirty = n > 0;
+      return n;
+    }
+
+    grid.addEventListener('input', refreshGrid);
+    grid.addEventListener('change', refreshGrid);
+
+    resetBtn.addEventListener('click', function () {
+      fields.forEach(function (el) {
+        if (el.type === 'checkbox') {
+          el.checked = el.dataset.initial === 'true';
+        } else {
+          el.value = el.dataset.initial;
+        }
+      });
+      refreshGrid();
+    });
+
+    // Ctrl+S / Cmd+S saves, the way a spreadsheet would.
+    document.addEventListener('keydown', function (ev) {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+        if (!saveBtn.disabled) {
+          ev.preventDefault();
+          saveBtn.click();
+        }
+      }
+    });
+
+    // Leaving with unsaved edits should not be silent.
+    window.addEventListener('beforeunload', function (ev) {
+      if (window.POT_gridDirty && !window.POT_saving) {
+        ev.preventDefault();
+        ev.returnValue = '';
+      }
+    });
+
+    var gridForm = document.getElementById('gridform');
+    if (gridForm) {
+      gridForm.addEventListener('submit', function () {
+        window.POT_saving = true;
+        saveBtn.disabled = true;
+        barText.textContent = 'Saving...';
+      });
+    }
+
+    // Buttons that reload the page would throw away pending edits.
+    document.addEventListener('submit', function (ev) {
+      var form = ev.target;
+      if (!form.hasAttribute || !form.hasAttribute('data-leaves-page')) return;
+      if (!window.POT_gridDirty) return;
+      var ok = window.confirm(
+        'You have unsaved edits in the table below. Doing this now reloads the page and discards them.\n\n' +
+        'Continue anyway?'
+      );
+      if (!ok) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      } else {
+        window.POT_saving = true;
+      }
+    }, true);
+
+    refreshGrid();
+  }
+
+  // ---------------------------------------------------------------
   // Confirmations on destructive forms
   // ---------------------------------------------------------------
 

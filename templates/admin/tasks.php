@@ -3,7 +3,8 @@
  * Admin: the global task library for one product.
  *
  * A task added here appears in every practice onboarding this product,
- * as Not Started, with no further action needed.
+ * as Not Started, with no further action needed. Edits across the whole
+ * table are committed by the single Save button at the bottom.
  *
  * @var array  $products
  * @var int    $product_id
@@ -28,8 +29,7 @@ $page_title = 'Task library';
   <?php foreach ($products as $p): ?>
     <a class="tab <?= ((int) $p['id'] === $product_id) ? 'on' : '' ?>"
        href="<?= e(url('admin/tasks', ['product_id' => (int) $p['id']])) ?>">
-      <?= e($p['name']) ?>
-      <span class="tab-n"><?= (int) $p['task_count'] ?></span>
+      <?= e($p['name']) ?><span class="tab-n"><?= (int) $p['task_count'] ?></span>
     </a>
   <?php endforeach; ?>
 </nav>
@@ -48,32 +48,24 @@ $page_title = 'Task library';
     <input type="hidden" name="product_id" value="<?= $product_id ?>">
     <input type="hidden" name="is_active" value="1">
 
-    <label class="field f-grow">
-      <span>Task name <em>required</em></span>
-      <input type="text" name="name" required maxlength="200" placeholder="e.g. Configure SMS number">
-    </label>
+    <label class="field f-grow"><span>Task name <em>required</em></span>
+      <input type="text" name="name" required maxlength="200" placeholder="e.g. Configure SMS number"></label>
 
-    <label class="field">
-      <span>Category <em>required</em></span>
+    <label class="field"><span>Category <em>required</em></span>
       <select name="category_id" required>
         <?php foreach ($categories as $c): ?>
           <option value="<?= (int) $c['id'] ?>"><?= e($c['name']) ?></option>
         <?php endforeach; ?>
-      </select>
-    </label>
+      </select></label>
 
-    <label class="field f-grow">
-      <span>Description</span>
-      <input type="text" name="description" maxlength="500" placeholder="Optional detail shown under the task name">
-    </label>
+    <label class="field f-grow"><span>Description</span>
+      <input type="text" name="description" maxlength="500" placeholder="Optional detail shown under the task name"></label>
 
     <div class="form-actions">
       <button type="submit" class="btn btn-primary btn-sm">Add task</button>
     </div>
   </form>
-  <p class="muted">
-    It will land at the bottom of <?= e($product['name']) ?>'s list. Use the arrows to move it.
-  </p>
+  <p class="muted">It will land at the bottom of <?= e($product['name']) ?>'s list. Use the arrows to move it.</p>
 </section>
 
 <div class="toolbar">
@@ -93,39 +85,40 @@ $page_title = 'Task library';
   <div class="empty"><h3>No tasks yet</h3><p>Add the first one above.</p></div>
 <?php else: ?>
 
-<div class="edit-rows cols-task">
+<form method="post" action="<?= e(url('tasks-save-all')) ?>" id="gridform">
+  <?= Csrf::field() ?>
+  <input type="hidden" name="product_id" value="<?= $product_id ?>">
+</form>
+
+<div class="edit-rows cols-task" data-grid>
   <div class="edit-head">
-    <span>Move</span><span>Task</span><span>Category</span><span>Description</span>
-    <span class="ta-c">Active</span><span></span>
+    <span>Move</span><span>Task</span><span>Category</span><span>Description</span><span class="ta-c">Active</span>
   </div>
 
-  <?php foreach ($rows as $r): ?>
-    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>">
+  <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
+    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>">
       <span class="cell cell-move">
-        <form method="post" action="<?= e(url('task-move')) ?>" class="inline-form">
+        <form method="post" action="<?= e(url('task-move')) ?>" class="inline-form" data-leaves-page>
           <?= Csrf::field() ?>
-          <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+          <input type="hidden" name="id" value="<?= $id ?>">
           <input type="hidden" name="dir" value="up">
           <button type="submit" class="btn btn-icon" title="Move up" aria-label="Move <?= e($r['name']) ?> up">↑</button>
         </form>
-        <form method="post" action="<?= e(url('task-move')) ?>" class="inline-form">
+        <form method="post" action="<?= e(url('task-move')) ?>" class="inline-form" data-leaves-page>
           <?= Csrf::field() ?>
-          <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+          <input type="hidden" name="id" value="<?= $id ?>">
           <input type="hidden" name="dir" value="down">
           <button type="submit" class="btn btn-icon" title="Move down" aria-label="Move <?= e($r['name']) ?> down">↓</button>
         </form>
       </span>
 
-      <form method="post" action="<?= e(url('task-save')) ?>" class="edit-row edit-row-task">
-        <?= Csrf::field() ?>
-        <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-        <input type="hidden" name="product_id" value="<?= (int) $r['product_id'] ?>">
-
+      <div class="edit-row edit-row-task">
         <label class="cell"><span class="cell-lab">Task</span>
-          <input type="text" name="name" value="<?= e($r['name']) ?>" required maxlength="200"></label>
+          <input form="gridform" type="text" maxlength="200" name="rows[<?= $id ?>][name]"
+                 value="<?= e($r['name']) ?>"></label>
 
         <label class="cell"><span class="cell-lab">Category</span>
-          <select name="category_id">
+          <select form="gridform" name="rows[<?= $id ?>][category_id]">
             <?php foreach ($categories as $c): ?>
               <option value="<?= (int) $c['id'] ?>" <?= ((int) $r['category_id'] === (int) $c['id']) ? 'selected' : '' ?>>
                 <?= e($c['name']) ?>
@@ -134,33 +127,34 @@ $page_title = 'Task library';
           </select></label>
 
         <label class="cell"><span class="cell-lab">Description</span>
-          <input type="text" name="description" value="<?= e($r['description'] ?? '') ?>" maxlength="500"></label>
+          <input form="gridform" type="text" maxlength="500" name="rows[<?= $id ?>][description]"
+                 value="<?= e($r['description'] ?? '') ?>"></label>
 
         <label class="cell ta-c"><span class="cell-lab">Active</span>
-          <input type="checkbox" name="is_active" value="1" <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
-
-        <span class="cell cell-act"><button type="submit" class="btn btn-quiet btn-xs">Save</button></span>
-      </form>
+          <input form="gridform" type="hidden" name="rows[<?= $id ?>][is_active]" value="0">
+          <input form="gridform" type="checkbox" name="rows[<?= $id ?>][is_active]" value="1"
+                 <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
+      </div>
 
       <span class="edit-row-side">
         <?php if (!empty($r['is_active'])): ?>
-          <form method="post" action="<?= e(url('task-delete')) ?>" class="inline-form"
+          <form method="post" action="<?= e(url('task-delete')) ?>" class="inline-form" data-leaves-page
                 data-confirm="Deactivate &quot;<?= e($r['name']) ?>&quot;? It disappears from every practice, and any status already recorded is kept.">
             <?= Csrf::field() ?>
-            <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+            <input type="hidden" name="id" value="<?= $id ?>">
             <button type="submit" class="btn btn-quiet btn-xs">Deactivate</button>
           </form>
         <?php else: ?>
-          <form method="post" action="<?= e(url('task-reactivate')) ?>" class="inline-form">
+          <form method="post" action="<?= e(url('task-reactivate')) ?>" class="inline-form" data-leaves-page>
             <?= Csrf::field() ?>
-            <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+            <input type="hidden" name="id" value="<?= $id ?>">
             <button type="submit" class="btn btn-quiet btn-xs">Reactivate</button>
           </form>
         <?php endif; ?>
-        <form method="post" action="<?= e(url('task-delete')) ?>" class="inline-form"
+        <form method="post" action="<?= e(url('task-delete')) ?>" class="inline-form" data-leaves-page
               data-confirm="Permanently delete &quot;<?= e($r['name']) ?>&quot; and the status recorded against it for every practice? This cannot be undone.">
           <?= Csrf::field() ?>
-          <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+          <input type="hidden" name="id" value="<?= $id ?>">
           <input type="hidden" name="hard" value="1">
           <button type="submit" class="btn btn-danger btn-xs">Delete</button>
         </form>
@@ -168,6 +162,8 @@ $page_title = 'Task library';
     </div>
   <?php endforeach; ?>
 </div>
+
+<?php require APP_ROOT . '/templates/partials/savebar.php'; ?>
 
 <p class="table-note">
   Deactivate rather than delete when a task is simply no longer part of the process. Deleting
