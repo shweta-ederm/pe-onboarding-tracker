@@ -1,0 +1,25 @@
+# This project is authored on Windows and runs on Linux hosting.
+#
+# Everything is normalised to LF in the repository and checked out as LF.
+# This matters most for .cpanel.yml: cPanel's YAML parser rejects the file
+# if it arrives with CRLF line endings, and the deploy silently does
+# nothing. It also keeps .htaccess and the .sql files predictable.
+
+* text=auto eol=lf
+
+*.php       text eol=lf
+*.sql       text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.htaccess  text eol=lf
+.gitignore  text eol=lf
+
+# Anything binary added later should not be touched.
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
