@@ -4,15 +4,17 @@ deployment:
     # ---------------------------------------------------------------
     # Nothing here needs editing.
     #
-    # $HOME is your cPanel account's home folder, so this works without
-    # hardcoding a username. The app is served at
-    # https://yourdomain.com/onboarding
+    # This account hosts several sites. public_html belongs to the main
+    # domain, jandyrecall.com, and each additional domain reads from its
+    # own folder inside it. jandy.us reads from public_html/jandy.us,
+    # so the app is deployed there and served at:
     #
-    # If a deploy ever fails saying the path does not exist, replace
-    # $HOME with the absolute path shown in cPanel's General Information
-    # panel, for example /home/abc123def.
+    #     https://jandy.us/onboarding
+    #
+    # $HOME avoids hardcoding the cPanel username. Only this folder is
+    # ever written to; no other site on the account is touched.
     # ---------------------------------------------------------------
-    - export DEPLOYPATH=$HOME/public_html/onboarding
+    - export DEPLOYPATH=$HOME/public_html/jandy.us/onboarding
 
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/mkdir -p $DEPLOYPATH/config
