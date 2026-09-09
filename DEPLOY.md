@@ -123,27 +123,56 @@ Then open the dashboard and sign in with your PIN.
 
 ## Deploying a change
 
-```bash
-git add -A
-git commit -m "What changed"
-git push
-```
+No commands needed. Once Claude has made and committed the change, it is
+three clicks.
 
-Then in cPanel → Git Version Control, on the repository row:
+**1. Send it to GitHub**
 
-1. **Update from Remote** — pulls your push into the server's working copy.
-2. **Deploy HEAD Commit** — runs `.cpanel.yml`, copying files into the live
-   folder.
+Open **GitHub Desktop**. The blue button at the top will say **Push origin**
+with a number next to it. Click it.
 
-The deploy log appears in cPanel. Both steps are needed; pulling alone does not
-publish.
+**2. Pull it onto the server**
 
-### Optional: deploy on push
+cPanel → search `git` → **Git™ Version Control** → **Manage** on the
+`pe-onboarding-tracker` row → **Pull or Deploy** tab → click
+**Update from Remote**.
 
-Add a GitHub webhook so step 1 happens automatically. GitHub → repo → Settings
-→ Webhooks → Add webhook, with the payload URL cPanel shows in Git Version
-Control. You still click Deploy, unless your plan supports auto-deployment, in
-which case cPanel offers a checkbox for it.
+**3. Publish it**
+
+On the same tab, click **Deploy HEAD Commit**. The log should end without
+errors.
+
+Then refresh https://jandy.us/onboarding/ to see the change. Both steps 2 and 3
+are needed; pulling alone does not publish.
+
+### What a deploy does not touch
+
+- **`config/config.php`** is never copied or overwritten. Your database
+  password and admin PIN survive every deploy.
+- **The database** is never modified. Your practices, task statuses, assignees,
+  notes, and history are untouched.
+- **Files you deleted** from the repository are not removed from the server,
+  because the deploy copies rather than mirrors. If a change involves deleting
+  a file, it has to be removed from the server by hand in File Manager.
+
+### If a change needs the database altered
+
+Adding a field or a table needs a schema change as well as new code. This
+account cannot be relied on to run `tools/migrate.php`, since that needs true
+shell access. Instead:
+
+1. cPanel → **phpMyAdmin**
+2. Select the `onboarding` database on the left
+3. Click the **SQL** tab
+4. Paste the SQL provided and click **Go**
+
+Take a backup first, via **Export** on the same screen.
+
+### Rolling back a bad change
+
+Ask for the change to be reverted. That produces a new commit undoing it, which
+you push and deploy the same way. Code rollbacks do not undo database changes,
+which is why schema changes should be additive.
 
 ### If the schema changed
 
