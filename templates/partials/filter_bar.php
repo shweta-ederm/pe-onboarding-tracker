@@ -121,6 +121,9 @@ $carry = ['sort' => $_GET['sort'] ?? null, 'dir' => $_GET['dir'] ?? null, 'id' =
         <?php if ($has('attention')): ?>
           <label><input type="checkbox" name="attention" value="1" <?= !empty($filters['only_attention']) ? 'checked' : '' ?>> Needs attention</label>
         <?php endif; ?>
+        <?php if ($has('completed')): ?>
+          <label class="f-toggle"><input type="checkbox" name="completed" value="1" <?= !empty($filters['show_completed']) ? 'checked' : '' ?>> Show completed</label>
+        <?php endif; ?>
       </div>
     </div>
   <?php endif; ?>

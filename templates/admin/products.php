@@ -23,7 +23,7 @@ $page_title = 'Products';
   <form method="post" action="<?= e(url('product-save')) ?>" class="row-form">
     <?= Csrf::field() ?>
     <label class="field f-grow">
-      <span>Name <em>required</em></span>
+      <span>Name <abbr class="req" title="Required">*</abbr></span>
       <input type="text" name="name" required maxlength="120" placeholder="e.g. Patient Portal">
     </label>
     <label class="field">

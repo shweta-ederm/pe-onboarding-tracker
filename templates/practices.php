@@ -96,12 +96,10 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
       <th class="c-name">Practice</th>
       <th class="c-products">Products</th>
       <th class="c-progress">Progress</th>
-      <th class="c-num">Done</th>
       <th class="c-num">Left</th>
       <th class="c-num">Blocked</th>
       <th class="c-num">Overdue</th>
       <th class="c-golive">Target go-live</th>
-      <th class="c-updated">Updated</th>
       <?php if ($is_admin): ?><th class="c-act">Actions</th><?php endif; ?>
     </tr>
   </thead>
@@ -138,7 +136,6 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
       </td>
 
       <td class="c-progress"><?php $pct = (int) $r['progress']; require APP_ROOT . '/templates/partials/progress.php'; ?></td>
-      <td class="c-num"><?= (int) $r['completed'] ?></td>
       <td class="c-num"><?= (int) $r['remaining'] ?></td>
 
       <td class="c-num">
@@ -163,8 +160,6 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
           </span>
         <?php endif; ?>
       </td>
-
-      <td class="c-updated"><span class="muted"><?= e(fmt_ago($r['last_updated'])) ?></span></td>
 
       <?php if ($is_admin): ?>
         <td class="c-act">

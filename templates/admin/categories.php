@@ -17,7 +17,7 @@ $page_title = 'Categories';
   <form method="post" action="<?= e(url('category-save')) ?>" class="row-form">
     <?= Csrf::field() ?>
     <label class="field f-grow">
-      <span>Name <em>required</em></span>
+      <span>Name <abbr class="req" title="Required">*</abbr></span>
       <input type="text" name="name" required maxlength="120" placeholder="e.g. Data Migration">
     </label>
     <div class="form-actions">

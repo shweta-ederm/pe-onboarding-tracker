@@ -23,7 +23,7 @@ $page_title = $editing ? ('Edit ' . $practice['name']) : 'Add practice';
 
     <div class="grid-2">
       <label class="field">
-        <span>Practice name <em>required</em></span>
+        <span>Practice name <abbr class="req" title="Required">*</abbr></span>
         <input type="text" name="name" required maxlength="180" value="<?= e($practice['name'] ?? '') ?>">
       </label>
 

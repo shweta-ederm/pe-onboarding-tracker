@@ -9,6 +9,7 @@
  * @var array $by_category
  * @var array $filters
  * @var bool  $filtered
+ * @var bool  $hiding_done
  * @var int   $shown
  * @var array $products
  * @var array $categories
@@ -133,7 +134,7 @@ $days        = days_until($practice['target_go_live_date'] ?? null);
 <h2 class="section-h">Onboarding tasks</h2>
 
 <?php
-$show = ['q', 'product', 'category', 'status', 'assignee', 'flags'];
+$show = ['q', 'product', 'category', 'status', 'assignee', 'flags', 'completed'];
 $filter_page = 'practice';
 require APP_ROOT . '/templates/partials/filter_bar.php';
 ?>
@@ -158,7 +159,14 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
 
 <?php if ($filtered): ?>
   <p class="filter-note">
-    Showing <?= (int) $shown ?> of <?= (int) $rollup['total'] ?> tasks. The progress figures above always reflect every task.
+    Showing <?= (int) $shown ?> of <?= (int) $rollup['total'] ?> tasks<?php
+      if (!empty($hiding_done) && (int) $rollup['completed'] > 0) {
+          echo ', with ' . (int) $rollup['completed'] . ' completed hidden';
+      }
+    ?>. The progress figures above always count every task.
+    <?php if (!empty($hiding_done)): ?>
+      <a href="<?= e(url_with(['completed' => 1])) ?>">Show completed</a>
+    <?php endif; ?>
   </p>
 <?php endif; ?>
 

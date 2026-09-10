@@ -49,10 +49,10 @@ $page_title = 'Task library';
     <input type="hidden" name="product_id" value="<?= $product_id ?>">
     <input type="hidden" name="is_active" value="1">
 
-    <label class="field f-grow"><span>Task name <em>required</em></span>
+    <label class="field f-grow"><span>Task name <abbr class="req" title="Required">*</abbr></span>
       <input type="text" name="name" required maxlength="200" placeholder="e.g. Configure SMS number"></label>
 
-    <label class="field"><span>Category <em>required</em></span>
+    <label class="field"><span>Category <abbr class="req" title="Required">*</abbr></span>
       <select name="category_id" required>
         <?php foreach ($categories as $c): ?>
           <option value="<?= (int) $c['id'] ?>"><?= e($c['name']) ?></option>

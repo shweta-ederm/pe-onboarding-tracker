@@ -36,7 +36,7 @@ $page_title = 'All tasks';
 </div>
 
 <?php
-$show = ['q', 'practice', 'product', 'category', 'status', 'assignee', 'flags'];
+$show = ['q', 'practice', 'product', 'category', 'status', 'assignee', 'flags', 'completed'];
 $filter_page = 'tasks';
 require APP_ROOT . '/templates/partials/filter_bar.php';
 ?>

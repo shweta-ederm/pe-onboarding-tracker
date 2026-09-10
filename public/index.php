@@ -64,6 +64,9 @@ function read_filters(): array
         'only_blocked' => !empty($_GET['blocked']),
         'only_overdue' => !empty($_GET['overdue']),
         'only_attention' => !empty($_GET['attention']),
+        // Completed work is hidden unless asked for. Progress figures
+        // always count it; this only affects what is listed.
+        'show_completed' => !empty($_GET['completed']),
         'include_archived' => !empty($_GET['archived']),
         'sort'         => (string) ($_GET['sort'] ?? 'name'),
         'dir'          => (($_GET['dir'] ?? 'asc') === 'desc') ? 'desc' : 'asc',
@@ -1049,13 +1052,10 @@ switch ($route) {
 
         $f = read_filters();
 
-        // Unfiltered rows drive the progress figures so filtering the
-        // view never changes the reported percentages.
-        $allRows      = Repo::practiceTasks($id);
-        $filteredRows = ($f['product_id'] || $f['category_id'] || $f['status']
-                         || $f['assignee_id'] || $f['only_blocked'] || $f['only_overdue'] || $f['q'])
-                        ? Repo::practiceTasks($id, $f)
-                        : $allRows;
+        // Unfiltered rows drive the progress figures, so neither the
+        // filters nor hiding completed work changes the percentages.
+        $allRows      = Repo::practiceTasks($id, ['show_completed' => true]);
+        $filteredRows = Repo::practiceTasks($id, $f);
 
         $grouped   = Repo::groupTasks($filteredRows);
         $allByProd = Repo::groupTasks($allRows);
@@ -1076,7 +1076,8 @@ switch ($route) {
             'by_product'  => $byProduct,
             'by_category' => Repo::rollupByCategory($allRows),
             'filters'     => $f,
-            'filtered'    => $filteredRows !== $allRows,
+            'filtered'    => count($filteredRows) !== count($allRows),
+            'hiding_done' => empty($f['show_completed']),
             'shown'       => count($filteredRows),
             'products'    => Repo::practiceProducts($id),
             'categories'  => Repo::categories(),

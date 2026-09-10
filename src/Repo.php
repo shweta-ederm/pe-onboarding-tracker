@@ -409,6 +409,12 @@ final class Repo
             $where[] = "pt.due_date IS NOT NULL AND pt.due_date < CURDATE()
                         AND {$st} NOT IN ('completed','not_applicable')";
         }
+        // Finished work is hidden unless explicitly asked for. An
+        // explicit status filter always wins, so filtering for
+        // Completed still shows completed tasks.
+        if (empty($f['show_completed']) && empty($f['status'])) {
+            $where[] = "{$st} <> 'completed'";
+        }
         if (!empty($f['q'])) {
             $where[] = '(t.name LIKE :q1 OR pt.notes LIKE :q2)';
             $args['q1'] = $args['q2'] = '%' . $f['q'] . '%';
@@ -751,6 +757,9 @@ final class Repo
         if (!empty($f['only_overdue'])) {
             $where[] = "pt.due_date IS NOT NULL AND pt.due_date < CURDATE()
                         AND {$st} NOT IN ('completed','not_applicable')";
+        }
+        if (empty($f['show_completed']) && empty($f['status'])) {
+            $where[] = "{$st} <> 'completed'";
         }
         if (!empty($f['q'])) {
             $where[] = '(t.name LIKE :q1 OR pt.notes LIKE :q2 OR pr.name LIKE :q3)';

@@ -16,7 +16,7 @@ $page_title = 'People';
   <h2 class="card-h">Add a person</h2>
   <form method="post" action="<?= e(url('assignee-save')) ?>" class="row-form">
     <?= Csrf::field() ?>
-    <label class="field f-grow"><span>Name <em>required</em></span>
+    <label class="field f-grow"><span>Name <abbr class="req" title="Required">*</abbr></span>
       <input type="text" name="name" required maxlength="120"></label>
     <label class="field"><span>Role</span>
       <input type="text" name="role_title" maxlength="120" placeholder="e.g. Implementation"></label>
