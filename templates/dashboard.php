@@ -1,47 +1,51 @@
 <?php
 /**
- * Main dashboard: every practice, with progress and attention flags.
+ * Dashboard: where the work sits right now.
  *
- * @var array $rows
+ * The practice list lives on its own page. This answers the questions
+ * you cannot answer by scanning a table: who is carrying what, which
+ * product is soaking up effort, which stage everything is stuck at.
+ *
  * @var array $totals
- * @var array $filters
- * @var array $products
+ * @var array $by_status
+ * @var array $by_assignee
+ * @var array $by_product
+ * @var array $by_category
+ * @var array $upcoming
+ * @var array $stalled
  * @var bool  $is_admin
  */
 $page_title = 'Dashboard';
 
-$sortLinks = [
-    'name'     => 'Practice name',
-    'progress' => 'Progress',
-    'golive'   => 'Target go-live',
-    'updated'  => 'Last updated',
-    'blocked'  => 'Blocked tasks',
-    'overdue'  => 'Overdue tasks',
-];
-$curSort = $filters['sort'] ?? 'name';
-$curDir  = $filters['dir'] ?? 'asc';
+$openTotal = 0;
+foreach (['not_started', 'in_progress', 'waiting', 'blocked'] as $k) {
+    $openTotal += (int) ($by_status[$k] ?? 0);
+}
+$statusTotal = array_sum(array_map('intval', $by_status));
 ?>
 
 <div class="page-head">
   <div>
-    <h1>Onboarding dashboard</h1>
+    <h1>Dashboard</h1>
     <p class="sub">
-      <?= (int) $totals['practices'] ?> practice<?= $totals['practices'] === 1 ? '' : 's' ?> shown.
+      <?= (int) $totals['practices'] ?> active practice<?= $totals['practices'] === 1 ? '' : 's' ?>,
+      <?= $openTotal ?> task<?= $openTotal === 1 ? '' : 's' ?> still open.
       <?php if ($totals['attention'] > 0): ?>
-        <strong><?= (int) $totals['attention'] ?></strong> need<?= $totals['attention'] === 1 ? 's' : '' ?> attention.
+        <strong><?= (int) $totals['attention'] ?></strong> practice<?= $totals['attention'] === 1 ? '' : 's' ?> need attention.
       <?php else: ?>
         Nothing is blocked or overdue.
       <?php endif; ?>
     </p>
   </div>
-  <?php if ($is_admin): ?>
-    <div class="page-actions">
+  <div class="page-actions">
+    <a class="btn btn-quiet" href="<?= e(url('practices')) ?>">All practices</a>
+    <?php if ($is_admin): ?>
       <a class="btn btn-primary" href="<?= e(url('admin/practice-form')) ?>">Add practice</a>
-    </div>
-  <?php endif; ?>
+    <?php endif; ?>
+  </div>
 </div>
 
-<section class="stat-strip" aria-label="Portfolio summary">
+<section class="stat-strip" aria-label="Summary">
   <div class="stat">
     <span class="stat-label">Overall progress</span>
     <span class="stat-value"><?= (int) $totals['progress'] ?>%</span>
@@ -50,7 +54,11 @@ $curDir  = $filters['dir'] ?? 'asc';
   <div class="stat">
     <span class="stat-label">Needs attention</span>
     <span class="stat-value <?= $totals['attention'] > 0 ? 'v-alert' : '' ?>"><?= (int) $totals['attention'] ?></span>
-    <span class="stat-note">practices with a blocker or overdue task</span>
+    <span class="stat-note">
+      <?php if ($totals['attention'] > 0): ?>
+        <a href="<?= e(url('practices', ['attention' => 1])) ?>">See which</a>
+      <?php else: ?>all practices healthy<?php endif; ?>
+    </span>
   </div>
   <div class="stat">
     <span class="stat-label">Blocked tasks</span>
@@ -72,122 +80,122 @@ $curDir  = $filters['dir'] ?? 'asc';
   </div>
 </section>
 
-<?php
-$show = ['q', 'product', 'state', 'flags', 'attention'];
-$filter_page = 'dashboard';
-require APP_ROOT . '/templates/partials/filter_bar.php';
-?>
-
-<div class="sortbar">
-  <span class="sortbar-label">Sort by</span>
-  <?php foreach ($sortLinks as $key => $label):
-      $isOn    = ($curSort === $key);
-      // Counts and progress are most useful highest-first on the first click.
-      $default = in_array($key, ['blocked', 'overdue', 'progress', 'updated'], true) ? 'desc' : 'asc';
-      $nextDir = $isOn ? ($curDir === 'asc' ? 'desc' : 'asc') : $default;
-  ?>
-    <a class="sort-link <?= $isOn ? 'on' : '' ?>" href="<?= e(url_with(['sort' => $key, 'dir' => $nextDir])) ?>">
-      <?= e($label) ?><?php if ($isOn): ?><span class="caret"><?= $curDir === 'asc' ? '▲' : '▼' ?></span><?php endif; ?>
-    </a>
-  <?php endforeach; ?>
-</div>
-
-<?php if (!$rows): ?>
-  <div class="empty">
-    <h2>No practices match</h2>
-    <p>
-      <?php if ($filters['q'] || $filters['product_id'] || $filters['state'] || $filters['only_blocked'] || $filters['only_overdue'] || $filters['only_attention']): ?>
-        Try clearing the filters above.
-      <?php elseif ($is_admin): ?>
-        Add your first practice to get started.
-      <?php else: ?>
-        No practices have been set up yet.
-      <?php endif; ?>
-    </p>
+<?php if ($statusTotal > 0): ?>
+<section class="card">
+  <h2 class="card-h">Where everything stands</h2>
+  <div class="mixbar" role="img"
+       aria-label="<?php
+         $parts = [];
+         foreach (STATUSES as $k => $lab) {
+             if ((int) ($by_status[$k] ?? 0) > 0) { $parts[] = $by_status[$k] . ' ' . $lab; }
+         }
+         echo e(implode(', ', $parts));
+       ?>">
+    <?php foreach (STATUSES as $k => $label):
+        $n = (int) ($by_status[$k] ?? 0);
+        if ($n === 0) { continue; }
+        $w = round($n * 100 / $statusTotal, 2);
+    ?>
+      <span class="mixbar-seg <?= e(status_class($k)) ?>" style="width: <?= $w ?>%"
+            title="<?= e($label) ?>: <?= $n ?>"></span>
+    <?php endforeach; ?>
   </div>
-<?php else: ?>
+  <ul class="mixbar-key">
+    <?php foreach (STATUSES as $k => $label):
+        $n = (int) ($by_status[$k] ?? 0);
+        if ($n === 0) { continue; }
+    ?>
+      <li>
+        <span class="key-dot <?= e(status_class($k)) ?>"></span>
+        <a href="<?= e(url('tasks', ['status' => $k])) ?>"><?= e($label) ?></a>
+        <b><?= $n ?></b>
+      </li>
+    <?php endforeach; ?>
+  </ul>
+</section>
+<?php endif; ?>
 
-<div class="table-scroll">
-<table class="grid dash-grid">
-  <thead>
-    <tr>
-      <th class="c-name">Practice</th>
-      <th class="c-products">Products</th>
-      <th class="c-progress">Progress</th>
-      <th class="c-num">Done</th>
-      <th class="c-num">Left</th>
-      <th class="c-num">Blocked</th>
-      <th class="c-num">Overdue</th>
-      <th class="c-golive">Target go-live</th>
-      <th class="c-updated">Last updated</th>
-    </tr>
-  </thead>
-  <tbody>
-  <?php foreach ($rows as $r):
-      $href = url('practice', ['id' => (int) $r['id']]);
-      $rowCls = $r['needs_attention'] ? 'row-alert' : '';
-      if ($r['onboarding_state'] === 'completed') { $rowCls .= ' row-done'; }
-      if ($r['onboarding_state'] === 'on_hold')   { $rowCls .= ' row-hold'; }
-      $days = $r['days_to_golive'];
-  ?>
-    <tr class="<?= trim($rowCls) ?>">
-      <td class="c-name">
-        <a class="practice-link" href="<?= e($href) ?>"><?= e($r['name']) ?></a>
-        <span class="row-sub">
-          <?php if (!empty($r['location'])): ?><?= e($r['location']) ?> · <?php endif; ?>
-          <span class="state state-<?= e($r['onboarding_state']) ?>"><?= e(PRACTICE_STATES[$r['onboarding_state']] ?? '') ?></span>
-          <?php if (!empty($r['is_archived'])): ?> · <span class="muted">Archived</span><?php endif; ?>
-        </span>
-      </td>
+<div class="split">
+  <section class="card">
+    <h2 class="card-h">Open tasks by person</h2>
+    <?php
+      $chart_rows = array_map(static fn($r) => $r + [
+          'href' => url('tasks', ['assignee_id' => $r['assignee_id'] ?: 'none']),
+      ], $by_assignee);
+      $chart_empty = 'Nothing open. Either everything is done, or no products are selected yet.';
+      require APP_ROOT . '/templates/partials/bar_chart.php';
+    ?>
+    <p class="table-note">Counts exclude completed work and anything marked Not Applicable.</p>
+  </section>
 
-      <td class="c-products">
-        <?php if (!$r['products']): ?>
-          <span class="muted">No products selected</span>
-        <?php else: ?>
-          <?php foreach ($r['products'] as $pn): ?><span class="chip"><?= e($pn) ?></span><?php endforeach; ?>
-        <?php endif; ?>
-      </td>
-
-      <td class="c-progress">
-        <?php $pct = (int) $r['progress']; require APP_ROOT . '/templates/partials/progress.php'; ?>
-      </td>
-
-      <td class="c-num"><?= (int) $r['completed'] ?></td>
-      <td class="c-num"><?= (int) $r['remaining'] ?></td>
-
-      <td class="c-num">
-        <?php if ((int) $r['blocked'] > 0): ?>
-          <a class="pill pill-alert" href="<?= e(url('practice', ['id' => (int) $r['id'], 'blocked' => 1])) ?>"><?= (int) $r['blocked'] ?></a>
-        <?php else: ?><span class="muted">0</span><?php endif; ?>
-      </td>
-
-      <td class="c-num">
-        <?php if ((int) $r['overdue'] > 0): ?>
-          <a class="pill pill-warn" href="<?= e(url('practice', ['id' => (int) $r['id'], 'overdue' => 1])) ?>"><?= (int) $r['overdue'] ?></a>
-        <?php else: ?><span class="muted">0</span><?php endif; ?>
-      </td>
-
-      <td class="c-golive">
-        <?= e(fmt_date($r['target_go_live_date'])) ?>
-        <?php if ($days !== null && $r['onboarding_state'] !== 'completed'): ?>
-          <span class="row-sub <?= $days < 0 ? 'v-alert' : ($days <= 14 ? 'v-warn' : '') ?>">
-            <?php if ($days < 0): ?><?= abs($days) ?> days past
-            <?php elseif ($days === 0): ?>today
-            <?php else: ?>in <?= $days ?> days<?php endif; ?>
-          </span>
-        <?php endif; ?>
-      </td>
-
-      <td class="c-updated"><span class="muted"><?= e(fmt_ago($r['last_updated'])) ?></span></td>
-    </tr>
-  <?php endforeach; ?>
-  </tbody>
-</table>
+  <section class="card">
+    <h2 class="card-h">Open tasks by product</h2>
+    <?php
+      $chart_rows = array_map(static fn($r) => $r + [
+          'href' => url('tasks', ['product_id' => (int) $r['product_id']]),
+      ], $by_product);
+      $chart_empty = 'No products have open work.';
+      require APP_ROOT . '/templates/partials/bar_chart.php';
+    ?>
+  </section>
 </div>
 
-<p class="table-note">
-  Progress counts Completed tasks against every task except those marked Not Applicable.
-  A practice is flagged when it has a blocked task or an overdue one.
-</p>
+<div class="split">
+  <section class="card">
+    <h2 class="card-h">Open tasks by stage</h2>
+    <?php
+      $chart_rows = array_map(static fn($r) => $r + [
+          'href' => url('tasks', ['category_id' => (int) $r['category_id']]),
+      ], $by_category);
+      $chart_empty = 'No open work in any category.';
+      require APP_ROOT . '/templates/partials/bar_chart.php';
+    ?>
+    <p class="table-note">A pile-up in one stage usually means a bottleneck rather than a busy team.</p>
+  </section>
 
+  <section class="card">
+    <h2 class="card-h">Going live soon</h2>
+    <?php if (!$upcoming): ?>
+      <p class="muted">Nothing has a target go-live date in the next 60 days.</p>
+    <?php else: ?>
+      <ul class="mini-list">
+        <?php foreach ($upcoming as $u):
+            $pctDone = progress_pct((int) $u['completed'], (int) $u['countable']);
+            $away    = (int) $u['days_away'];
+        ?>
+          <li>
+            <div class="mini-row">
+              <a class="mini-name" href="<?= e(url('practice', ['id' => (int) $u['id']])) ?>">
+                <?= e($u['name']) ?>
+              </a>
+              <span class="mini-meta <?= $away < 0 ? 'v-alert' : ($away <= 14 ? 'v-warn' : '') ?>">
+                <?php if ($away < 0): ?><?= abs($away) ?>d past
+                <?php elseif ($away === 0): ?>today
+                <?php else: ?><?= $away ?>d away<?php endif; ?>
+              </span>
+            </div>
+            <?php $pct = $pctDone; $bar_size = 'sm'; require APP_ROOT . '/templates/partials/progress.php'; ?>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    <?php endif; ?>
+  </section>
+</div>
+
+<?php if ($stalled): ?>
+<section class="card">
+  <h2 class="card-h">Quiet for a while</h2>
+  <p class="muted">
+    Active practices nothing has been recorded against recently. These raise no flags, which is
+    exactly why they are easy to lose track of.
+  </p>
+  <ul class="quiet-list">
+    <?php foreach ($stalled as $s): ?>
+      <li>
+        <a href="<?= e(url('practice', ['id' => (int) $s['id']])) ?>"><?= e($s['name']) ?></a>
+        <span class="muted"><?= (int) $s['quiet_days'] ?> days</span>
+      </li>
+    <?php endforeach; ?>
+  </ul>
+</section>
 <?php endif; ?>

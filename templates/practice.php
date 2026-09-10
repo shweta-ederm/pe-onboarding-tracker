@@ -144,7 +144,9 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
         $pr = $by_product[$g['product_id']]['rollup'] ?? Repo::rollup($g['tasks']);
         $needs = ((int) $pr['blocked'] > 0 || (int) $pr['overdue'] > 0);
     ?>
-      <button type="button" class="tab" data-tab="<?= (int) $g['product_id'] ?>">
+      <button type="button" class="tab" data-tab="<?= (int) $g['product_id'] ?>"
+              <?= !empty($g['product_color']) ? 'style="--tab-color: ' . e($g['product_color']) . '"' : '' ?>>
+        <?php if (!empty($g['product_color'])): ?><span class="chip-dot" style="background: <?= e($g['product_color']) ?>"></span><?php endif; ?>
         <?= e($g['product_name']) ?>
         <span class="tab-n"><?= (int) $pr['progress'] ?>%</span>
         <?php if ($needs): ?><span class="tab-flag" title="Blocked or overdue work"></span><?php endif; ?>
@@ -187,7 +189,10 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
   ?>
     <section class="prod-block" data-product="<?= (int) $g['product_id'] ?>">
       <header class="prod-head">
-        <h3><?= e($g['product_name']) ?></h3>
+        <h3>
+          <?php if (!empty($g['product_color'])): ?><span class="chip-dot" style="background: <?= e($g['product_color']) ?>"></span><?php endif; ?>
+          <?= e($g['product_name']) ?>
+        </h3>
         <div class="prod-progress" data-rollup-product="<?= (int) $g['product_id'] ?>">
           <?php $pct = (int) $r['progress']; $bar_size = 'sm'; require APP_ROOT . '/templates/partials/progress.php'; ?>
           <span class="prod-count" data-count><?= (int) $r['completed'] ?> of <?= (int) $r['countable'] ?> done</span>

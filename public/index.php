@@ -427,10 +427,15 @@ if ($method === 'POST') {
                 if ($sort === 0) {
                     $sort = (int) Database::scalar('SELECT COALESCE(MAX(sort_order),0) + 10 FROM products');
                 }
+                $color = post_str('color');
+                if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
+                    $color = '#334155';
+                }
                 Database::run(
-                    'INSERT INTO products (name, slug, description, sort_order, is_active)
-                     VALUES (:name, :slug, :description, :sort_order, 1)',
-                    ['name' => $name, 'slug' => $slug, 'description' => $desc, 'sort_order' => $sort]
+                    'INSERT INTO products (name, slug, description, color, sort_order, is_active)
+                     VALUES (:name, :slug, :description, :color, :sort_order, 1)',
+                    ['name' => $name, 'slug' => $slug, 'description' => $desc,
+                     'color' => $color, 'sort_order' => $sort]
                 );
                 Activity::log('product', 'create', Database::lastId(), null, null, null, null, $name,
                     'Product created: ' . $name);
@@ -469,12 +474,19 @@ if ($method === 'POST') {
 
         // ---- Grid saves: one button for the whole table ----------------
         case 'products-save-all': {
+            $rows = (array) ($_POST['rows'] ?? []);
+            foreach ($rows as $id => $vals) {
+                if (isset($vals['color']) && !preg_match('/^#[0-9A-Fa-f]{6}$/', trim((string) $vals['color']))) {
+                    unset($rows[$id]['color']);
+                }
+            }
             $r = save_grid('products', 'product', [
                 'sort_order'  => 'int',
                 'name'        => 'str',
+                'color'       => 'strnull',
                 'description' => 'strnull',
                 'is_active'   => 'bool',
-            ], (array) ($_POST['rows'] ?? []));
+            ], $rows);
             grid_flash($r, 'product');
             redirect(url('admin/products'));
         }
@@ -969,8 +981,9 @@ switch ($route) {
         break;
 
     case 'dashboard': {
-        $f    = read_filters();
-        $rows = Repo::practiceSummaries($f);
+        // Totals come from the same summaries the practices page uses,
+        // so the two pages can never disagree.
+        $rows = Repo::practiceSummaries(['sort' => 'name']);
 
         $totals = [
             'practices' => count($rows),
@@ -983,8 +996,24 @@ switch ($route) {
         $totals['progress'] = progress_pct($totals['completed'], $totals['countable']);
 
         render('dashboard', [
-            'rows'     => $rows,
-            'totals'   => $totals,
+            'totals'      => $totals,
+            'by_status'   => Repo::countsByStatus(),
+            'by_assignee' => Repo::openByAssignee(),
+            'by_product'  => Repo::openByProduct(),
+            'by_category' => Repo::openByCategory(),
+            'upcoming'    => Repo::upcomingGoLive(),
+            'stalled'     => Repo::stalled(),
+        ]);
+        break;
+    }
+
+    case 'practices': {
+        $f = read_filters();
+        if (!Auth::isAdmin()) {
+            $f['include_archived'] = false;
+        }
+        render('practices', [
+            'rows'     => Repo::practiceSummaries($f),
             'filters'  => $f,
             'products' => Repo::products(),
         ]);
@@ -1084,11 +1113,9 @@ switch ($route) {
     // ---- Admin screens -------------------------------------------------
 
     case 'admin/practices':
-        Auth::requireAdmin();
-        render('admin/practices', [
-            'rows'    => Repo::practiceSummaries(['include_archived' => true, 'sort' => 'name']),
-        ]);
-        break;
+        // Kept so old links and bookmarks still work. There is one
+        // practices page now, with the admin actions shown inline.
+        redirect(url('practices', ['archived' => 1]));
 
     case 'admin/practice-form': {
         Auth::requireAdmin();

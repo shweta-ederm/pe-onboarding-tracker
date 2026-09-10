@@ -26,6 +26,10 @@ $page_title = 'Products';
       <span>Name <em>required</em></span>
       <input type="text" name="name" required maxlength="120" placeholder="e.g. Patient Portal">
     </label>
+    <label class="field">
+      <span>Colour</span>
+      <input type="color" name="color" value="#334155">
+    </label>
     <label class="field f-grow">
       <span>Description</span>
       <input type="text" name="description" maxlength="500" placeholder="One line, shown when picking products">
@@ -40,7 +44,7 @@ $page_title = 'Products';
 
 <div class="edit-rows cols-product" data-grid>
   <div class="edit-head">
-    <span>Order</span><span>Name</span><span>Description</span>
+    <span>Order</span><span>Name</span><span class="ta-c">Colour</span><span>Description</span>
     <span class="ta-c">Tasks</span><span class="ta-c">Practices</span><span class="ta-c">Active</span>
   </div>
 
@@ -54,6 +58,10 @@ $page_title = 'Products';
         <label class="cell"><span class="cell-lab">Name</span>
           <input form="gridform" type="text" maxlength="120" name="rows[<?= $id ?>][name]"
                  value="<?= e($r['name']) ?>"></label>
+
+        <label class="cell ta-c"><span class="cell-lab">Colour</span>
+          <input form="gridform" type="color" class="swatch" name="rows[<?= $id ?>][color]"
+                 value="<?= e($r['color'] ?: '#334155') ?>"></label>
 
         <label class="cell"><span class="cell-lab">Description</span>
           <input form="gridform" type="text" maxlength="500" name="rows[<?= $id ?>][description]"
@@ -82,4 +90,8 @@ $page_title = 'Products';
 
 <?php require APP_ROOT . '/templates/partials/savebar.php'; ?>
 
+<p class="table-note">
+  The colour identifies the product in chips, tabs and dashboard charts. Defaults come from the
+  Practice Engine design system.
+</p>
 <p class="table-note">Lower order numbers appear first. Leave gaps of ten so you can slot a product in between later.</p>

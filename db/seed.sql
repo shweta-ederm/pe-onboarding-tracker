@@ -17,13 +17,14 @@ INSERT INTO categories (name, sort_order) VALUES
 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order);
 
 -- Products -------------------------------------------------------------
-INSERT INTO products (name, slug, description, sort_order) VALUES
-  ('Recall Health', 'recall-health', 'Automated patient recall and reactivation campaigns.', 10),
-  ('Online Scheduler', 'online-scheduler', 'Self-service online appointment booking.', 20),
-  ('AI Voice Agent', 'ai-voice-agent', 'AI phone agent for inbound call handling and booking.', 30),
-  ('Payment Portal', 'payment-portal', 'Online patient payments, statements, and plans.', 40),
-  ('Patient Intake', 'patient-intake', 'Digital intake forms and consents.', 50)
-ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description);
+INSERT INTO products (name, slug, description, color, sort_order) VALUES
+  ('Recall Health', 'recall-health', 'Automated patient recall and reactivation campaigns.', '#F8941D', 10),
+  ('Online Scheduler', 'online-scheduler', 'Self-service online appointment booking.', '#0284C7', 20),
+  ('AI Voice Agent', 'ai-voice-agent', 'AI phone agent for inbound call handling and booking.', '#6E62A8', 30),
+  ('Payment Portal', 'payment-portal', 'Online patient payments, statements, and plans.', '#5CB85C', 40),
+  ('Patient Intake', 'patient-intake', 'Digital intake forms and consents.', '#B07AA1', 50)
+ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description),
+                        color = COALESCE(products.color, VALUES(color));
 
 -- Assignees ------------------------------------------------------------
 INSERT INTO assignees (name, role_title) VALUES

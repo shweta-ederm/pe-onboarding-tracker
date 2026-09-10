@@ -70,7 +70,9 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
         <td class="c-name">
           <a href="<?= e(url('practice', ['id' => (int) $r['practice_id']])) ?>"><?= e($r['practice_name']) ?></a>
         </td>
-        <td><span class="chip"><?= e($r['product_name']) ?></span></td>
+        <td><span class="chip">
+          <?php if (!empty($r['product_color'])): ?><span class="chip-dot" style="background: <?= e($r['product_color']) ?>"></span><?php endif; ?>
+          <?= e($r['product_name']) ?></span></td>
         <td class="c-task"><?= e($r['task_name']) ?></td>
         <td><span class="muted"><?= e($r['category_name']) ?></span></td>
         <td><?php $status = (string) $r['status']; require APP_ROOT . '/templates/partials/status_badge.php'; ?></td>

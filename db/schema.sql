@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS products (
   name         VARCHAR(120) NOT NULL,
   slug         VARCHAR(140) NOT NULL,
   description  VARCHAR(500) DEFAULT NULL,
+  -- Hex colour used for this product's chips, tabs and chart bars.
+  color        CHAR(7) DEFAULT NULL,
   sort_order   INT NOT NULL DEFAULT 0,
   is_active    TINYINT(1) NOT NULL DEFAULT 1,
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

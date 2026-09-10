@@ -305,14 +305,17 @@ final class Repo
     private static function productNamesByPractice(): array
     {
         $rows = Database::all(
-            'SELECT pp.practice_id, p.name
+            'SELECT pp.practice_id, p.name, p.color
                FROM practice_products pp
                JOIN products p ON p.id = pp.product_id AND p.is_active = 1
               ORDER BY p.sort_order, p.name'
         );
         $out = [];
         foreach ($rows as $r) {
-            $out[(int) $r['practice_id']][] = (string) $r['name'];
+            $out[(int) $r['practice_id']][] = [
+                'name'  => (string) $r['name'],
+                'color' => $r['color'] ?? null,
+            ];
         }
         return $out;
     }
@@ -414,6 +417,7 @@ final class Repo
         $rows = Database::all(
             "SELECT t.id AS task_id, t.name AS task_name, t.description, t.sort_order,
                     p.id AS product_id, p.name AS product_name, p.sort_order AS product_sort,
+                    p.color AS product_color,
                     c.id AS category_id, c.name AS category_name, c.sort_order AS category_sort,
                     {$st} AS status,
                     pt.id AS state_id,
@@ -453,10 +457,11 @@ final class Repo
             $cid = (int) $r['category_id'];
             if (!isset($out[$pid])) {
                 $out[$pid] = [
-                    'product_id'   => $pid,
-                    'product_name' => (string) $r['product_name'],
-                    'categories'   => [],
-                    'tasks'        => [],
+                    'product_id'    => $pid,
+                    'product_name'  => (string) $r['product_name'],
+                    'product_color' => $r['product_color'] ?? null,
+                    'categories'    => [],
+                    'tasks'         => [],
                 ];
             }
             if (!isset($out[$pid]['categories'][$cid])) {
@@ -510,6 +515,170 @@ final class Repo
             $out[] = array_merge(['name' => $name], self::rollup($catRows));
         }
         return $out;
+    }
+
+    // =================================================================
+    // Dashboard aggregates
+    //
+    // "Open" means everything still to do: not Completed and not marked
+    // Not Applicable. Archived practices are excluded throughout, as are
+    // practices whose onboarding is finished, since neither represents
+    // work anybody has to pick up.
+    // =================================================================
+
+    /** The JOIN chain every dashboard aggregate shares. */
+    private static function openTasksJoins(): string
+    {
+        return "FROM practices pr
+                JOIN practice_products pp   ON pp.practice_id = pr.id
+                JOIN products p             ON p.id = pp.product_id AND p.is_active = 1
+                JOIN tasks t                ON t.product_id = p.id AND t.is_active = 1
+                JOIN categories c           ON c.id = t.category_id
+                LEFT JOIN practice_tasks pt ON pt.practice_id = pr.id AND pt.task_id = t.id";
+    }
+
+    /** Which practices count as live work. */
+    private static function openTasksWhere(): string
+    {
+        return "WHERE pr.is_archived = 0 AND pr.onboarding_state <> 'completed'";
+    }
+
+    /** Open work per person, including everything nobody owns yet. */
+    public static function openByAssignee(): array
+    {
+        $st    = self::ST;
+        $asg   = self::ASG;
+        $joins = self::openTasksJoins();
+        $where = self::openTasksWhere();
+
+        return Database::all(
+            "SELECT COALESCE(a.name, 'Unassigned') AS label,
+                    a.id AS assignee_id,
+                    COUNT(*) AS open_count,
+                    SUM(CASE WHEN {$st} = 'blocked' THEN 1 ELSE 0 END) AS blocked,
+                    SUM(CASE WHEN pt.due_date IS NOT NULL AND pt.due_date < CURDATE()
+                             THEN 1 ELSE 0 END) AS overdue
+               {$joins}
+               LEFT JOIN assignees a ON a.id = {$asg}
+               {$where}
+                 AND {$st} NOT IN ('completed','not_applicable')
+              GROUP BY a.id, label
+              ORDER BY open_count DESC, label"
+        );
+    }
+
+    /** Open work per product. */
+    public static function openByProduct(): array
+    {
+        $st   = self::ST;
+        $joins = self::openTasksJoins();
+        $where = self::openTasksWhere();
+
+        return Database::all(
+            "SELECT p.name AS label, p.id AS product_id, p.color AS color,
+                    COUNT(*) AS open_count,
+                    SUM(CASE WHEN {$st} = 'blocked' THEN 1 ELSE 0 END) AS blocked,
+                    SUM(CASE WHEN pt.due_date IS NOT NULL AND pt.due_date < CURDATE()
+                             THEN 1 ELSE 0 END) AS overdue
+               {$joins}
+               {$where}
+                 AND {$st} NOT IN ('completed','not_applicable')
+              GROUP BY p.id, p.name, p.color
+              ORDER BY open_count DESC, p.sort_order"
+        );
+    }
+
+    /** Open work per category, which shows where onboarding stalls. */
+    public static function openByCategory(): array
+    {
+        $st   = self::ST;
+        $joins = self::openTasksJoins();
+        $where = self::openTasksWhere();
+
+        return Database::all(
+            "SELECT c.name AS label, c.id AS category_id,
+                    COUNT(*) AS open_count,
+                    SUM(CASE WHEN {$st} = 'blocked' THEN 1 ELSE 0 END) AS blocked,
+                    SUM(CASE WHEN pt.due_date IS NOT NULL AND pt.due_date < CURDATE()
+                             THEN 1 ELSE 0 END) AS overdue
+               {$joins}
+               {$where}
+                 AND {$st} NOT IN ('completed','not_applicable')
+              GROUP BY c.id, c.name
+              ORDER BY c.sort_order, c.name"
+        );
+    }
+
+    /** Every task by status, for the distribution bar. */
+    public static function countsByStatus(): array
+    {
+        $st   = self::ST;
+        $joins = self::openTasksJoins();
+        $where = self::openTasksWhere();
+
+        $rows = Database::all(
+            "SELECT {$st} AS status, COUNT(*) AS n {$joins} {$where} GROUP BY {$st}"
+        );
+
+        $out = array_fill_keys(array_keys(STATUSES), 0);
+        foreach ($rows as $r) {
+            $out[(string) $r['status']] = (int) $r['n'];
+        }
+        return $out;
+    }
+
+    /**
+     * Practices with a target go-live inside the next few weeks, soonest
+     * first. The question this answers is "what lands next".
+     */
+    public static function upcomingGoLive(int $days = 60, int $limit = 6): array
+    {
+        $days  = max(1, min(365, $days));
+        $limit = max(1, min(50, $limit));
+        $st    = self::ST;
+
+        return Database::all(
+            "SELECT pr.id, pr.name, pr.target_go_live_date,
+                    DATEDIFF(pr.target_go_live_date, CURDATE()) AS days_away,
+                    SUM(CASE WHEN {$st} <> 'not_applicable' THEN 1 ELSE 0 END) AS countable,
+                    SUM(CASE WHEN {$st} = 'completed' THEN 1 ELSE 0 END) AS completed
+               FROM practices pr
+               LEFT JOIN practice_products pp ON pp.practice_id = pr.id
+               LEFT JOIN products p           ON p.id = pp.product_id AND p.is_active = 1
+               LEFT JOIN tasks t              ON t.product_id = p.id AND t.is_active = 1
+               LEFT JOIN practice_tasks pt    ON pt.practice_id = pr.id AND pt.task_id = t.id
+              WHERE pr.is_archived = 0
+                AND pr.onboarding_state <> 'completed'
+                AND pr.target_go_live_date IS NOT NULL
+                AND pr.target_go_live_date <= DATE_ADD(CURDATE(), INTERVAL {$days} DAY)
+              GROUP BY pr.id, pr.name, pr.target_go_live_date
+              ORDER BY pr.target_go_live_date
+              LIMIT {$limit}"
+        );
+    }
+
+    /**
+     * Practices nothing has happened to in a while. A quiet practice is
+     * easy to lose track of precisely because it raises no flags.
+     */
+    public static function stalled(int $days = 14, int $limit = 6): array
+    {
+        $days  = max(1, min(365, $days));
+        $limit = max(1, min(50, $limit));
+
+        return Database::all(
+            "SELECT pr.id, pr.name,
+                    GREATEST(pr.updated_at, COALESCE(MAX(pt.updated_at), pr.updated_at)) AS last_touch,
+                    DATEDIFF(CURDATE(), DATE(GREATEST(pr.updated_at,
+                             COALESCE(MAX(pt.updated_at), pr.updated_at)))) AS quiet_days
+               FROM practices pr
+               LEFT JOIN practice_tasks pt ON pt.practice_id = pr.id
+              WHERE pr.is_archived = 0 AND pr.onboarding_state = 'active'
+              GROUP BY pr.id, pr.name, pr.updated_at
+             HAVING quiet_days >= {$days}
+              ORDER BY quiet_days DESC
+              LIMIT {$limit}"
+        );
     }
 
     // =================================================================
@@ -571,7 +740,7 @@ final class Repo
         $rows = Database::all(
             "SELECT pr.id AS practice_id, pr.name AS practice_name,
                     t.id AS task_id, t.name AS task_name,
-                    p.id AS product_id, p.name AS product_name,
+                    p.id AS product_id, p.name AS product_name, p.color AS product_color,
                     c.id AS category_id, c.name AS category_name,
                     {$st} AS status,
                     {$asg} AS assignee_id,
@@ -711,7 +880,7 @@ final class Repo
         $asg = self::ASG;
         $row = Database::one(
             "SELECT t.id AS task_id, t.name AS task_name,
-                    p.id AS product_id, p.name AS product_name,
+                    p.id AS product_id, p.name AS product_name, p.color AS product_color,
                     c.id AS category_id, c.name AS category_name,
                     {$st} AS status,
                     {$asg} AS assignee_id,
