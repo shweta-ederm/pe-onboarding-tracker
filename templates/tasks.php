@@ -1,9 +1,13 @@
 <?php
 /**
- * Cross-practice task list. This is the view that answers "what is
- * blocked everywhere" and "what is on my plate".
+ * Cross-practice task list, one product at a time.
+ *
+ * This is the view that answers "what is blocked everywhere" and
+ * "what is on my plate". Every product is rendered and one is shown,
+ * so the page stays short without a round trip per tab.
  *
  * @var array $rows
+ * @var array $grouped    product_id => ['product_name', 'product_color', 'rows']
  * @var array $rollup
  * @var array $filters
  * @var array $practices
@@ -44,49 +48,81 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
   </div>
 <?php else: ?>
 
-<div class="table-scroll">
-<table class="grid all-grid">
-  <thead>
-    <tr>
-      <th>Practice</th>
-      <th>Product</th>
-      <th>Task</th>
-      <th>Category</th>
-      <th>Status</th>
-      <th>Assignee</th>
-      <th>Due</th>
-      <th>Notes</th>
-    </tr>
-  </thead>
-  <tbody>
-    <?php foreach ($rows as $r):
-        $cls = '';
-        if ($r['status'] === 'completed')      { $cls = 'task-done'; }
-        if ($r['status'] === 'not_applicable') { $cls = 'task-na'; }
-        if ($r['status'] === 'blocked')        { $cls = 'task-blocked'; }
-        if (!empty($r['is_overdue']))          { $cls .= ' task-overdue'; }
+<?php if (count($grouped) > 1): ?>
+  <nav class="tabs" data-product-tabs aria-label="Products">
+    <?php foreach ($grouped as $g):
+        $blocked = 0;
+        $overdue = 0;
+        foreach ($g['rows'] as $r) {
+            if ($r['status'] === 'blocked') { $blocked++; }
+            if (!empty($r['is_overdue']))   { $overdue++; }
+        }
     ?>
-      <tr class="<?= trim($cls) ?>">
-        <td class="c-name">
-          <a href="<?= e(url('practice', ['id' => (int) $r['practice_id']])) ?>"><?= e($r['practice_name']) ?></a>
-        </td>
-        <td><span class="chip">
-          <?php if (!empty($r['product_color'])): ?><span class="chip-dot" style="background: <?= e($r['product_color']) ?>"></span><?php endif; ?>
-          <?= e($r['product_name']) ?></span></td>
-        <td class="c-task"><?= e($r['task_name']) ?></td>
-        <td><span class="muted"><?= e($r['category_name']) ?></span></td>
-        <td><?php $status = (string) $r['status']; require APP_ROOT . '/templates/partials/status_badge.php'; ?></td>
-        <td><?= $r['assignee_name'] ? e($r['assignee_name']) : '<span class="muted">Unassigned</span>' ?></td>
-        <td class="c-due">
-          <?= e(fmt_date($r['due_date'] ?? null)) ?>
-          <?php if (!empty($r['is_overdue'])): ?><span class="chip chip-alert">Overdue</span><?php endif; ?>
-        </td>
-        <td class="c-notes-ro"><?= $r['notes'] ? e($r['notes']) : '<span class="muted">—</span>' ?></td>
-      </tr>
+      <button type="button" class="tab" data-tab="<?= (int) $g['product_id'] ?>">
+        <?php if (!empty($g['product_color'])): ?>
+          <span class="chip-dot" style="background: <?= e($g['product_color']) ?>"></span>
+        <?php endif; ?>
+        <?= e($g['product_name']) ?>
+        <span class="tab-n"><?= count($g['rows']) ?></span>
+        <?php if ($blocked > 0 || $overdue > 0): ?>
+          <span class="tab-flag" title="<?= $blocked ?> blocked, <?= $overdue ?> overdue"></span>
+        <?php endif; ?>
+      </button>
     <?php endforeach; ?>
-  </tbody>
-</table>
-</div>
+    <button type="button" class="tab" data-tab="all">All products<span class="tab-n"><?= count($rows) ?></span></button>
+  </nav>
+<?php endif; ?>
+
+<?php foreach ($grouped as $g): ?>
+  <section class="prod-block" data-product="<?= (int) $g['product_id'] ?>">
+    <?php if (count($grouped) > 1): ?>
+      <header class="prod-head">
+        <h3>
+          <?php if (!empty($g['product_color'])): ?>
+            <span class="chip-dot" style="background: <?= e($g['product_color']) ?>"></span>
+          <?php endif; ?>
+          <?= e($g['product_name']) ?>
+        </h3>
+        <span class="prod-count"><?= count($g['rows']) ?> task<?= count($g['rows']) === 1 ? '' : 's' ?></span>
+      </header>
+    <?php endif; ?>
+
+    <div class="table-scroll">
+    <table class="grid all-grid">
+      <thead>
+        <tr>
+          <th>Practice</th><th>Task</th><th>Category</th>
+          <th>Status</th><th>Assignee</th><th>Due</th><th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($g['rows'] as $r):
+            $cls = '';
+            if ($r['status'] === 'completed')      { $cls = 'task-done'; }
+            if ($r['status'] === 'not_applicable') { $cls = 'task-na'; }
+            if ($r['status'] === 'blocked')        { $cls = 'task-blocked'; }
+            if (!empty($r['is_overdue']))          { $cls .= ' task-overdue'; }
+        ?>
+          <tr class="<?= trim($cls) ?>">
+            <td class="c-name">
+              <a href="<?= e(url('practice', ['id' => (int) $r['practice_id']])) ?>"><?= e($r['practice_name']) ?></a>
+            </td>
+            <td class="c-task"><?= e($r['task_name']) ?></td>
+            <td><span class="muted"><?= e($r['category_name']) ?></span></td>
+            <td><?php $status = (string) $r['status']; require APP_ROOT . '/templates/partials/status_badge.php'; ?></td>
+            <td><?= $r['assignee_name'] ? e($r['assignee_name']) : '<span class="muted">Unassigned</span>' ?></td>
+            <td class="c-due">
+              <?= e(fmt_date($r['due_date'] ?? null)) ?>
+              <?php if (!empty($r['is_overdue'])): ?><span class="chip chip-alert">Overdue</span><?php endif; ?>
+            </td>
+            <td class="c-notes-ro"><?= $r['notes'] ? e($r['notes']) : '<span class="muted">—</span>' ?></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    </div>
+  </section>
+<?php endforeach; ?>
 
 <p class="table-note">
   Editing happens on a practice's own page, where the whole product context is visible.

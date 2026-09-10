@@ -989,14 +989,34 @@ switch ($route) {
             'practices' => count($rows),
             'blocked'   => array_sum(array_column($rows, 'blocked')),
             'overdue'   => array_sum(array_column($rows, 'overdue')),
-            'attention' => count(array_filter($rows, static fn($r) => $r['needs_attention'])),
+            'attention' => count(array_filter(
+                $rows,
+                static fn($r) => $r['needs_attention'] && $r['onboarding_state'] === 'active'
+            )),
             'completed' => array_sum(array_column($rows, 'completed')),
             'countable' => array_sum(array_column($rows, 'countable')),
         ];
         $totals['progress'] = progress_pct($totals['completed'], $totals['countable']);
 
+        // Practice health, derived from the same summaries so the donut
+        // and the practices page can never disagree.
+        $health = ['total' => count($rows), 'on_track' => 0, 'attention' => 0,
+                   'on_hold' => 0, 'completed' => 0];
+        foreach ($rows as $r) {
+            if ($r['onboarding_state'] === 'completed') {
+                $health['completed']++;
+            } elseif ($r['onboarding_state'] === 'on_hold') {
+                $health['on_hold']++;
+            } elseif ($r['needs_attention']) {
+                $health['attention']++;
+            } else {
+                $health['on_track']++;
+            }
+        }
+
         render('dashboard', [
             'totals'      => $totals,
+            'health'      => $health,
             'by_status'   => Repo::countsByStatus(),
             'by_assignee' => Repo::openByAssignee(),
             'by_product'  => Repo::openByProduct(),
@@ -1071,6 +1091,7 @@ switch ($route) {
         $rows = Repo::tasksAcrossPractices($f);
         render('tasks', [
             'rows'       => $rows,
+            'grouped'    => Repo::groupTasksByProduct($rows),
             'rollup'     => Repo::rollup($rows),
             'filters'    => $f,
             'practices'  => Repo::practicesSimple(),

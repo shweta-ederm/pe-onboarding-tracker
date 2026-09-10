@@ -494,10 +494,11 @@
   var productTabs = document.querySelector('[data-product-tabs]');
 
   if (productTabs) {
-    var blocks = document.querySelectorAll('.prod-block[data-product]');
+    var blocks = document.querySelectorAll('[data-product]:not([data-product-tabs])');
     var tabs = productTabs.querySelectorAll('[data-tab]');
     // Remember the choice per practice for the length of the session.
-    var memoryKey = 'pot-product-' + (location.search.match(/[?&]id=(\d+)/) || [])[1];
+    var memoryKey = 'pot-product-' + (location.search.match(/[?&]p=([a-z\/-]+)/) || [])[1]
+                + '-' + ((location.search.match(/[?&]id=(\d+)/) || [])[1] || '');
 
     function showProduct(which) {
       blocks.forEach(function (b) {
@@ -525,7 +526,7 @@
     var remembered = null;
     try { remembered = sessionStorage.getItem(memoryKey); } catch (e) {}
     var valid = remembered && (remembered === 'all' ||
-      document.querySelector('.prod-block[data-product="' + remembered + '"]'));
+      document.querySelector('[data-product="' + remembered + '"]'));
 
     showProduct(valid ? remembered : (tabs.length ? tabs[0].getAttribute('data-tab') : 'all'));
   }

@@ -477,6 +477,28 @@ final class Repo
         return $out;
     }
 
+    /**
+     * Group a cross-practice task list by product, keeping the incoming
+     * order within each group. Used by the All tasks tabs.
+     */
+    public static function groupTasksByProduct(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $r) {
+            $pid = (int) $r['product_id'];
+            if (!isset($out[$pid])) {
+                $out[$pid] = [
+                    'product_id'    => $pid,
+                    'product_name'  => (string) $r['product_name'],
+                    'product_color' => $r['product_color'] ?? null,
+                    'rows'          => [],
+                ];
+            }
+            $out[$pid]['rows'][] = $r;
+        }
+        return $out;
+    }
+
     /** Totals for a set of derived task rows. Works for any scope. */
     public static function rollup(array $rows): array
     {
