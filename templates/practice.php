@@ -16,6 +16,7 @@
  * @var array $assignees
  * @var array $activity
  * @var bool  $is_admin
+ * @var ?int  $member_id
  */
 $page_title  = (string) $practice['name'];
 $practice_id = (int) $practice['id'];
@@ -218,7 +219,7 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
           <table class="grid task-grid">
             <thead>
               <tr>
-                <?php if ($is_admin): ?><th class="c-check" aria-label="Select"></th><?php endif; ?>
+                <?php if ($is_admin || $member_id !== null): ?><th class="c-check" aria-label="Select"></th><?php endif; ?>
                 <th class="c-task">Task</th>
                 <th class="c-status">Status</th>
                 <th class="c-assignee">Assignee</th>
@@ -237,7 +238,7 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
     </section>
   <?php endforeach; ?>
 
-  <?php if ($is_admin): ?>
+  <?php if ($is_admin || $member_id !== null): ?>
     <div class="bulkbar" id="bulkbar" hidden>
       <span class="bulk-count"><span id="bulk-n">0</span> selected</span>
 

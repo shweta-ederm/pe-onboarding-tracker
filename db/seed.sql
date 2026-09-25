@@ -1,19 +1,19 @@
 -- Practice Onboarding Tracker - seed data
 -- Everything here is editable in the admin UI. The four practices are
--- samples so the dashboard is not empty; delete them once you add real ones.
+-- samples so the dashboard is not empty. Delete them once real ones exist.
 -- Contains no patient data.
 
 SET NAMES utf8mb4;
 
 -- Categories -----------------------------------------------------------
-INSERT INTO categories (name, sort_order) VALUES
-  ('Administrative', 10),
-  ('Technical', 20),
-  ('Configuration', 30),
-  ('Cosmetic / Design', 40),
-  ('Training', 50),
-  ('Testing', 60),
-  ('Go-Live', 70)
+INSERT INTO categories (name, color, sort_order) VALUES
+  ('Administrative', '#0284C7', 10),
+  ('Technical', '#6E62A8', 20),
+  ('Configuration', '#0F8B8D', 30),
+  ('Cosmetic / Design', '#B07AA1', 40),
+  ('Training', '#D9A253', 50),
+  ('Testing', '#5B8FA8', 60),
+  ('Go-Live', '#3E8E5C', 70)
 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order);
 
 -- Products -------------------------------------------------------------
@@ -27,12 +27,12 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description),
                         color = COALESCE(products.color, VALUES(color));
 
 -- Assignees ------------------------------------------------------------
-INSERT INTO assignees (name, role_title) VALUES
-  ('Implementation Lead', 'Implementation'),
-  ('Onboarding Specialist', 'Onboarding'),
-  ('Technical Integrations', 'Engineering'),
-  ('Training Team', 'Training'),
-  ('Practice Contact', 'Practice')
+INSERT INTO assignees (first_name, last_name, name, role_title) VALUES
+  ('Implementation', 'Lead', 'Implementation Lead', 'Implementation'),
+  ('Onboarding', 'Specialist', 'Onboarding Specialist', 'Onboarding'),
+  ('Technical', 'Integrations', 'Technical Integrations', 'Engineering'),
+  ('Training', 'Team', 'Training Team', 'Training'),
+  ('Practice', 'Contact', 'Practice Contact', 'Practice')
 ;
 
 -- Global tasks ---------------------------------------------------------

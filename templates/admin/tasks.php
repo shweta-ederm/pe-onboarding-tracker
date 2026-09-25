@@ -103,8 +103,9 @@ $page_title = 'Task library';
 </form>
 
 <p class="table-note" style="margin-bottom:.6rem">
-  Drag a row by its handle to reorder, or use the arrows. The new order is applied when you save,
-  along with any other edits.
+  Tasks are grouped by category. Drag a row by its handle to reorder, or use the arrows. The new
+  order is applied when you save, along with any other edits. Moving a task to another category
+  is done with its Category dropdown, not by dragging.
 </p>
 
 <div class="edit-rows cols-task" data-grid data-sortable>
@@ -112,8 +113,17 @@ $page_title = 'Task library';
     <span>Move</span><span>Task</span><span>Category</span><span>Default assignee</span><span>Description</span><span class="ta-c">Active</span>
   </div>
 
-  <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
-    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>">
+  <?php $lastCat = null; foreach ($rows as $r): $id = (int) $r['id'];
+      // A divider each time the category changes. Not draggable, so the
+      // order the drag handler reads stays a plain list of task rows.
+      if ($lastCat !== (int) $r['category_id']):
+          $lastCat = (int) $r['category_id']; ?>
+        <div class="cat-divider" style="--cat: <?= e($r['category_color'] ?: '#94A3B8') ?>">
+          <span class="cat-swatch"></span><?= e($r['category_name']) ?>
+        </div>
+      <?php endif; ?>
+    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>"
+         style="--cat: <?= e($r['category_color'] ?: '#94A3B8') ?>">
       <span class="cell cell-move">
         <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
 

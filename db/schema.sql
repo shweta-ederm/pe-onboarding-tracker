@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS categories (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name         VARCHAR(120) NOT NULL,
+  color        CHAR(7) DEFAULT NULL,
   sort_order   INT NOT NULL DEFAULT 0,
   is_active    TINYINT(1) NOT NULL DEFAULT 1,
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -36,14 +37,23 @@ CREATE TABLE IF NOT EXISTS categories (
   KEY ix_categories_order (sort_order, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- People are also the user accounts. A person with a username and a
+-- PIN can sign in. They see everything and may change only the tasks
+-- assigned to them. `name` is a denormalised display name kept in step
+-- with first_name and last_name on every save.
 CREATE TABLE IF NOT EXISTS assignees (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  first_name   VARCHAR(80) NOT NULL DEFAULT '',
+  last_name    VARCHAR(80) NOT NULL DEFAULT '',
   name         VARCHAR(120) NOT NULL,
-  email        VARCHAR(190) DEFAULT NULL,
+  username     VARCHAR(60) DEFAULT NULL,
+  pin_hash     VARCHAR(255) DEFAULT NULL,
+  last_login   DATETIME DEFAULT NULL,
   role_title   VARCHAR(120) DEFAULT NULL,
   is_active    TINYINT(1) NOT NULL DEFAULT 1,
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_assignees_username (username),
   KEY ix_assignees_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

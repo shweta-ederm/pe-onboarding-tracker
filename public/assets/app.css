@@ -898,3 +898,48 @@ a.kpi:hover {
 
 /* The show-completed toggle reads as a switch rather than a filter. */
 .f-toggle { font-weight: 500; color: var(--ink); }
+
+
+/* ---------- Category grouping ---------- */
+
+.cat-group { margin-bottom: 1.1rem; }
+.cat-h-tinted {
+  background: color-mix(in srgb, var(--cat) 9%, transparent);
+  border-left: 3px solid var(--cat);
+  border-radius: var(--radius-xs);
+  padding: .4rem .65rem; margin-bottom: .45rem;
+  color: var(--ink-2); font-weight: 600;
+}
+.cat-swatch {
+  width: 8px; height: 8px; border-radius: 2px;
+  background: var(--cat); display: inline-block; flex: none;
+}
+.cat-divider {
+  display: flex; align-items: center; gap: .45rem;
+  padding: .5rem 1.15rem; font-size: .75rem; font-weight: 600;
+  color: var(--ink-2); letter-spacing: .01em;
+  background: color-mix(in srgb, var(--cat) 8%, var(--surface-2));
+  border-top: 1px solid var(--line);
+  border-left: 3px solid var(--cat);
+}
+.edit-rows .cat-divider:first-child { border-top: 0; }
+.cols-task .edit-line { border-left: 3px solid color-mix(in srgb, var(--cat) 55%, transparent); }
+
+/* Browsers without color-mix still get a readable, if flatter, grouping. */
+@supports not (color: color-mix(in srgb, red 10%, blue)) {
+  .cat-h-tinted, .cat-divider { background: var(--surface-3); }
+  .cols-task .edit-line { border-left-color: var(--line-2); }
+}
+
+/* A row the signed-in person owns. */
+.task-mine .task-name { font-weight: 500; }
+
+/* Who is signed in. */
+.who { font-size: .8125rem; color: var(--ink-2); font-weight: 500; }
+
+/* Setting a PIN, and destructive actions that re-ask for one. */
+.pin-form, .purge-form { display: inline-flex; gap: .3rem; align-items: center; margin: 0; }
+.pin-form input, .purge-form input {
+  width: 6.5rem; font-size: .75rem; padding: .25rem .4rem; min-width: 0;
+}
+.purge-form { margin-left: .35rem; }

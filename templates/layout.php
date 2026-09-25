@@ -38,16 +38,20 @@
         <a href="<?= e(url('admin/categories')) ?>" <?= ($template === 'admin/categories') ? 'class="on"' : '' ?>>Categories</a>
         <a href="<?= e(url('admin/assignees')) ?>" <?= ($template === 'admin/assignees') ? 'class="on"' : '' ?>>People</a>
         <a href="<?= e(url('admin/activity')) ?>" <?= ($template === 'admin/activity') ? 'class="on"' : '' ?>>Activity</a>
+        <a href="<?= e(url('admin/archive')) ?>" <?= ($template === 'admin/archive') ? 'class="on"' : '' ?>>Archive</a>
       <?php endif; ?>
     </nav>
 
     <div class="topbar-right">
       <?php if ($is_admin): ?>
-        <span class="mode-pill mode-admin" title="You can edit everything">Admin</span>
+        <span class="mode-pill mode-admin" title="You can change anything">Admin</span>
+        <a class="btn btn-quiet btn-sm" href="<?= e(url('logout')) ?>">Sign out</a>
+      <?php elseif (Auth::isMember()): ?>
+        <span class="who"><?= e(Auth::displayName()) ?></span>
+        <span class="mode-pill mode-view" title="You can change the tasks assigned to you">Team</span>
         <a class="btn btn-quiet btn-sm" href="<?= e(url('logout')) ?>">Sign out</a>
       <?php else: ?>
-        <span class="mode-pill mode-view" title="Nothing on this page can be edited">Read only</span>
-        <a class="btn btn-quiet btn-sm" href="<?= e(url('login')) ?>">Admin sign in</a>
+        <a class="btn btn-quiet btn-sm" href="<?= e(url('login')) ?>">Sign in</a>
       <?php endif; ?>
     </div>
   </div>

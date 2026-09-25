@@ -21,7 +21,8 @@ function render(string $template, array $vars = []): void
     global $config;
 
     $vars['config']   = $config;
-    $vars['is_admin'] = Auth::isAdmin();
+    $vars['is_admin']  = Auth::isAdmin();
+    $vars['member_id'] = Auth::memberId();
     $vars['flashes']  = take_flashes();
     $vars['template'] = $template;
 
@@ -236,11 +237,20 @@ if ($method === 'POST') {
     // ---- JSON endpoints (inline editing) -----------------------------
     if ($route === 'api/task-save') {
         Csrf::requireValid(true);
-        Auth::requireAdmin(true);
+        Auth::requireLogin(true);
 
         $practiceId = (int) ($_POST['practice_id'] ?? 0);
         $taskId     = (int) ($_POST['task_id'] ?? 0);
         $field      = (string) ($_POST['field'] ?? '');
+
+        // A member may only touch a task assigned to them. Checked here,
+        // on the server, not merely hidden in the template.
+        if (!Auth::canEditTask($practiceId, $taskId)) {
+            json_out([
+                'ok' => false,
+                'error' => 'That task is not assigned to you, so you cannot change it.',
+            ], 403);
+        }
 
         $allowed = ['status', 'assignee_id', 'due_date', 'notes'];
         if (!in_array($field, $allowed, true)) {
@@ -302,17 +312,35 @@ if ($method === 'POST') {
     Csrf::requireValid();
 
     if ($route === 'login') {
-        $err = Auth::attempt((string) ($_POST['pin'] ?? ''));
+        $mode = ((string) ($_POST['mode'] ?? 'member')) === 'admin' ? 'admin' : 'member';
+
+        $err = $mode === 'admin'
+            ? Auth::attemptAdmin((string) ($_POST['pin'] ?? ''))
+            : Auth::attemptMember((string) ($_POST['username'] ?? ''), (string) ($_POST['pin'] ?? ''));
+
         if ($err === null) {
-            Activity::log('auth', 'login');
+            Activity::log('auth', 'login', null, null, null, null, null, null,
+                Auth::actor() . ' signed in');
             $next = (string) ($_POST['next'] ?? '');
             redirect($next !== '' && str_starts_with($next, 'index.php') ? $next : url('dashboard'));
         }
-        render('login', ['error' => $err, 'next' => (string) ($_POST['next'] ?? '')]);
+        render('login', [
+            'error' => $err,
+            'next'  => (string) ($_POST['next'] ?? ''),
+            'mode'  => $mode,
+        ]);
         exit;
     }
 
-    Auth::requireAdmin();
+    // Past this point every write needs at least a signed-in member.
+    // Individual handlers narrow that further.
+    Auth::requireLogin();
+
+    // Only two writes are open to members; everything else is admin.
+    $memberWritable = ['api/task-save', 'bulk-save'];
+    if (!in_array($route, $memberWritable, true)) {
+        Auth::requireAdmin();
+    }
 
     switch ($route) {
 
@@ -505,27 +533,40 @@ if ($method === 'POST') {
         }
 
         case 'assignees-save-all': {
-            // Reject bad addresses before touching the database.
             $rows = (array) ($_POST['rows'] ?? []);
-            $bad  = [];
+
             foreach ($rows as $id => $vals) {
-                $email = trim((string) ($vals['email'] ?? ''));
-                if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $bad[] = trim((string) ($vals['name'] ?? ('#' . (int) $id)));
-                    unset($rows[$id]);
+                if (!isset($vals['username'])) {
+                    continue;
+                }
+                $u = strtolower(trim((string) $vals['username']));
+                if ($u !== '' && !preg_match('/^[a-z0-9._-]{3,60}$/', $u)) {
+                    unset($rows[$id]['username']);
+                } else {
+                    $rows[$id]['username'] = $u !== '' ? $u : null;
                 }
             }
-            if ($bad) {
-                flash('That email address does not look valid, so this row was left alone: '
-                      . implode(', ', $bad), 'error');
+
+            try {
+                $r = save_grid('assignees', 'assignee', [
+                    'first_name' => 'str',
+                    'last_name'  => 'strnull',
+                    'username'   => 'strnull',
+                    'role_title' => 'strnull',
+                    'is_active'  => 'bool',
+                ], $rows, ['first_name']);
+            } catch (PDOException $ex) {
+                flash('Two people cannot share a username. Nothing was saved.', 'error');
+                redirect(url('admin/assignees'));
             }
 
-            $r = save_grid('assignees', 'assignee', [
-                'name'       => 'str',
-                'role_title' => 'strnull',
-                'email'      => 'strnull',
-                'is_active'  => 'bool',
-            ], $rows);
+            // `name` is the denormalised display name, so keep it in step.
+            Database::run(
+                "UPDATE assignees
+                    SET name = TRIM(CONCAT(first_name, ' ', COALESCE(last_name, '')))
+                  WHERE name <> TRIM(CONCAT(first_name, ' ', COALESCE(last_name, '')))"
+            );
+
             grid_flash($r, 'person');
             redirect(url('admin/assignees'));
         }
@@ -665,40 +706,82 @@ if ($method === 'POST') {
 
         // ---- Assignees ------------------------------------------------
         case 'assignee-save': {
-            $id   = (int) ($_POST['id'] ?? 0);
-            $name = post_str('name');
-            if ($name === '') {
-                flash('An assignee needs a name.', 'error');
+            $first = post_str('first_name');
+            $last  = post_str('last_name');
+            if ($first === '' && $last === '') {
+                flash('A person needs a first or last name.', 'error');
                 redirect(url('admin/assignees'));
             }
-            $email = post_str('email') ?: null;
-            if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                flash('That email address does not look valid.', 'error');
-                redirect(url('admin/assignees'));
-            }
-            $role   = post_str('role_title') ?: null;
-            $active = !empty($_POST['is_active']) ? 1 : 0;
+            $full = trim($first . ' ' . $last);
 
-            if ($id > 0) {
-                Database::run(
-                    'UPDATE assignees SET name = :name, email = :email, role_title = :role_title,
-                            is_active = :is_active
-                      WHERE id = :id',
-                    ['name' => $name, 'email' => $email, 'role_title' => $role,
-                     'is_active' => $active, 'id' => $id]
-                );
-                Activity::log('assignee', 'update', $id, null, null, null, null, $name, 'Assignee updated: ' . $name);
-                flash('Assignee updated.');
-            } else {
-                Database::run(
-                    'INSERT INTO assignees (name, email, role_title, is_active)
-                     VALUES (:name, :email, :role_title, 1)',
-                    ['name' => $name, 'email' => $email, 'role_title' => $role]
-                );
-                Activity::log('assignee', 'create', Database::lastId(), null, null, null, null, $name,
-                    'Assignee created: ' . $name);
-                flash('Assignee added.');
+            $username = strtolower(post_str('username'));
+            if ($username !== '' && !preg_match('/^[a-z0-9._-]{3,60}$/', $username)) {
+                flash('Usernames may use letters, numbers, dots, dashes and underscores, and must be at least 3 characters.', 'error');
+                redirect(url('admin/assignees'));
             }
+
+            $pin = post_str('pin');
+            if ($pin !== '' && !preg_match('/^[0-9]{6}$/', $pin)) {
+                flash('A PIN must be exactly 6 digits.', 'error');
+                redirect(url('admin/assignees'));
+            }
+            if ($pin !== '' && $username === '') {
+                flash('A PIN is only usable with a username, so set one too.', 'error');
+                redirect(url('admin/assignees'));
+            }
+
+            try {
+                Database::run(
+                    'INSERT INTO assignees (first_name, last_name, name, username, pin_hash, role_title, is_active)
+                     VALUES (:first_name, :last_name, :name, :username, :pin_hash, :role_title, 1)',
+                    [
+                        'first_name' => $first,
+                        'last_name'  => $last,
+                        'name'       => $full,
+                        'username'   => $username !== '' ? $username : null,
+                        'pin_hash'   => $pin !== '' ? password_hash($pin, PASSWORD_DEFAULT) : null,
+                        'role_title' => post_str('role_title') ?: null,
+                    ]
+                );
+            } catch (PDOException $ex) {
+                flash('That username is already taken.', 'error');
+                redirect(url('admin/assignees'));
+            }
+
+            Activity::log('assignee', 'create', Database::lastId(), null, null, null, null, $full,
+                'Person added: ' . $full);
+            flash($username !== '' && $pin !== ''
+                ? $full . ' can now sign in with the username ' . $username . '.'
+                : $full . ' added. Give them a username and PIN to let them sign in.');
+            redirect(url('admin/assignees'));
+        }
+
+        // ---- Set or reset somebody's PIN -------------------------------
+        case 'assignee-pin': {
+            $id  = (int) ($_POST['id'] ?? 0);
+            $a   = Repo::assignee($id);
+            $pin = post_str('pin');
+
+            if (!$a) {
+                not_found('That person does not exist.');
+            }
+            if (!preg_match('/^[0-9]{6}$/', $pin)) {
+                flash('A PIN must be exactly 6 digits.', 'error');
+                redirect(url('admin/assignees'));
+            }
+            if (empty($a['username'])) {
+                flash('Give ' . $a['name'] . ' a username first, otherwise there is nothing to sign in with.', 'error');
+                redirect(url('admin/assignees'));
+            }
+
+            Database::run('UPDATE assignees SET pin_hash = :h WHERE id = :id', [
+                'h'  => password_hash($pin, PASSWORD_DEFAULT),
+                'id' => $id,
+            ]);
+            // The PIN itself is never written anywhere, only its hash.
+            Activity::log('assignee', 'set_pin', $id, null, null, 'pin', null, null,
+                'PIN set for ' . $a['name']);
+            flash('New PIN set for ' . $a['name'] . '. Tell them what it is; it cannot be looked up later.');
             redirect(url('admin/assignees'));
         }
 
@@ -914,6 +997,26 @@ if ($method === 'POST') {
                 redirect(url('practice', ['id' => $practiceId]));
             }
 
+            // Silently dropping other people's tasks would be confusing,
+            // so say how many were skipped.
+            $allowed = array_values(array_filter(
+                $taskIds,
+                static fn($tid) => Auth::canEditTask($practiceId, (int) $tid)
+            ));
+            $refused = count($taskIds) - count($allowed);
+            if ($refused > 0) {
+                flash(sprintf(
+                    '%d of the selected tasks %s not assigned to you and %s left alone.',
+                    $refused,
+                    $refused === 1 ? 'is' : 'are',
+                    $refused === 1 ? 'was' : 'were'
+                ), 'error');
+            }
+            $taskIds = $allowed;
+            if (!$taskIds) {
+                redirect(url('practice', ['id' => $practiceId]));
+            }
+
             $changes = [];
             $status = (string) ($_POST['bulk_status'] ?? '');
             if ($status !== '' && isset(STATUSES[$status])) {
@@ -945,6 +1048,63 @@ if ($method === 'POST') {
             redirect(url('practice', ['id' => $practiceId]));
         }
 
+        // ---- Archive: restore and permanent delete ---------------------
+        case 'practice-restore': {
+            $id = (int) ($_POST['id'] ?? 0);
+            $p  = Repo::practice($id);
+            if (!$p) {
+                not_found('That practice does not exist.');
+            }
+            Database::run('UPDATE practices SET is_archived = 0 WHERE id = :id', ['id' => $id]);
+            Activity::log('practice', 'restore', $id, $id, null, null, null, null,
+                'Practice restored from the archive: ' . $p['name']);
+            flash($p['name'] . ' restored.');
+            redirect(url('admin/archive'));
+        }
+
+        case 'purge': {
+            // Destroying data asks for the PIN again rather than trusting
+            // that the session is still in the right hands.
+            if (!Auth::confirmAdminPin((string) ($_POST['pin'] ?? ''))) {
+                flash('That PIN was not correct, so nothing was deleted.', 'error');
+                redirect(url('admin/archive'));
+            }
+
+            $kind = (string) ($_POST['kind'] ?? '');
+            $id   = (int) ($_POST['id'] ?? 0);
+
+            if ($kind === 'practice') {
+                $p = Repo::practice($id);
+                if (!$p) {
+                    not_found('That practice does not exist.');
+                }
+                if (empty($p['is_archived'])) {
+                    flash('Only archived practices can be deleted. Archive it first.', 'error');
+                    redirect(url('admin/archive'));
+                }
+                Database::run('DELETE FROM practices WHERE id = :id', ['id' => $id]);
+                Activity::log('practice', 'purge', $id, null, null, null, (string) $p['name'], null,
+                    'Practice permanently deleted: ' . $p['name']);
+                flash($p['name'] . ' was permanently deleted.');
+            } elseif ($kind === 'task') {
+                $t = Repo::task($id);
+                if (!$t) {
+                    not_found('That task does not exist.');
+                }
+                if (!empty($t['is_active'])) {
+                    flash('Only deactivated tasks can be deleted. Deactivate it first.', 'error');
+                    redirect(url('admin/archive'));
+                }
+                Database::run('DELETE FROM tasks WHERE id = :id', ['id' => $id]);
+                Activity::log('task', 'purge', $id, null, null, null, (string) $t['name'], null,
+                    'Task permanently deleted: ' . $t['name']);
+                flash('"' . $t['name'] . '" was permanently deleted.');
+            } else {
+                flash('Nothing to delete.', 'error');
+            }
+            redirect(url('admin/archive'));
+        }
+
         // ---- Notes on a practice --------------------------------------
         case 'practice-notes-save': {
             $practiceId = (int) ($_POST['id'] ?? 0);
@@ -969,18 +1129,30 @@ if ($method === 'POST') {
 // GET routes
 // =====================================================================
 
+// Reading the portal now needs an account. The login page and the
+// sign-out link are the only exceptions.
+if (!in_array($route, ['login', 'logout'], true)) {
+    Auth::requireLogin();
+}
+
 switch ($route) {
 
     case 'logout':
+        Activity::log('auth', 'logout', null, null, null, null, null, null,
+            Auth::actor() . ' signed out');
         Auth::logout();
-        flash('Signed out. You are now in read-only mode.');
-        redirect(url('dashboard'));
+        flash('Signed out.');
+        redirect(url('login'));
 
     case 'login':
-        if (Auth::isAdmin()) {
+        if (Auth::isSignedIn()) {
             redirect(url('dashboard'));
         }
-        render('login', ['error' => null, 'next' => (string) ($_GET['next'] ?? '')]);
+        render('login', [
+            'error' => null,
+            'next'  => (string) ($_GET['next'] ?? ''),
+            'mode'  => ((string) ($_GET['mode'] ?? 'member')) === 'admin' ? 'admin' : 'member',
+        ]);
         break;
 
     case 'dashboard': {
@@ -1192,6 +1364,17 @@ switch ($route) {
         ]);
         break;
     }
+
+    case 'admin/archive':
+        Auth::requireAdmin();
+        render('admin/archive', [
+            'practices' => array_values(array_filter(
+                Repo::practiceSummaries(['include_archived' => true, 'sort' => 'name']),
+                static fn($r) => !empty($r['is_archived'])
+            )),
+            'tasks' => Repo::archivedTasks(),
+        ]);
+        break;
 
     case 'admin/activity': {
         Auth::requireAdmin();

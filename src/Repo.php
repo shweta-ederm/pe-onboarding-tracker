@@ -129,13 +129,14 @@ final class Repo
         return Database::all(
             'SELECT t.*, p.name AS product_name, p.sort_order AS product_sort,
                     c.name AS category_name, c.sort_order AS category_sort,
+                    c.color AS category_color,
                     da.name AS default_assignee_name
                FROM tasks t
                JOIN products p    ON p.id = t.product_id
                JOIN categories c  ON c.id = t.category_id
                LEFT JOIN assignees da ON da.id = t.default_assignee_id
               WHERE ' . implode(' AND ', $where) . '
-              ORDER BY p.sort_order, p.name, t.sort_order, t.id',
+              ORDER BY p.sort_order, p.name, c.sort_order, c.name, t.sort_order, t.id',
             $args
         );
     }
@@ -505,6 +506,25 @@ final class Repo
         return $out;
     }
 
+    /** Split a list of task rows into category groups, in order. */
+    public static function groupRowsByCategory(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $r) {
+            $cid = (int) $r['category_id'];
+            if (!isset($out[$cid])) {
+                $out[$cid] = [
+                    'category_id'    => $cid,
+                    'category_name'  => (string) $r['category_name'],
+                    'category_color' => $r['category_color'] ?? null,
+                    'rows'           => [],
+                ];
+            }
+            $out[$cid]['rows'][] = $r;
+        }
+        return $out;
+    }
+
     /** Totals for a set of derived task rows. Works for any scope. */
     public static function rollup(array $rows): array
     {
@@ -543,6 +563,25 @@ final class Repo
             $out[] = array_merge(['name' => $name], self::rollup($catRows));
         }
         return $out;
+    }
+
+    // =================================================================
+    // Archive
+    // =================================================================
+
+    /** Deactivated task definitions, with how much history each holds. */
+    public static function archivedTasks(): array
+    {
+        return Database::all(
+            'SELECT t.*, p.name AS product_name, p.color AS product_color,
+                    c.name AS category_name,
+                    (SELECT COUNT(*) FROM practice_tasks pt WHERE pt.task_id = t.id) AS state_count
+               FROM tasks t
+               JOIN products p   ON p.id = t.product_id
+               JOIN categories c ON c.id = t.category_id
+              WHERE t.is_active = 0
+              ORDER BY p.sort_order, t.sort_order, t.id'
+        );
     }
 
     // =================================================================
@@ -772,7 +811,8 @@ final class Repo
             "SELECT pr.id AS practice_id, pr.name AS practice_name,
                     t.id AS task_id, t.name AS task_name,
                     p.id AS product_id, p.name AS product_name, p.color AS product_color,
-                    c.id AS category_id, c.name AS category_name,
+                    c.id AS category_id, c.name AS category_name, c.color AS category_color,
+                    c.sort_order AS category_sort,
                     {$st} AS status,
                     {$asg} AS assignee_id,
                     pt.due_date, pt.notes, pt.updated_at,
@@ -785,7 +825,7 @@ final class Repo
                LEFT JOIN practice_tasks pt ON pt.practice_id = pr.id AND pt.task_id = t.id
                LEFT JOIN assignees a       ON a.id = {$asg}
               WHERE " . implode(' AND ', $where) . "
-              ORDER BY pr.name, p.sort_order, c.sort_order, t.sort_order, t.id
+              ORDER BY p.sort_order, c.sort_order, c.name, pr.name, t.sort_order, t.id
               LIMIT {$limit}",
             $args
         );
@@ -912,7 +952,8 @@ final class Repo
         $row = Database::one(
             "SELECT t.id AS task_id, t.name AS task_name,
                     p.id AS product_id, p.name AS product_name, p.color AS product_color,
-                    c.id AS category_id, c.name AS category_name,
+                    c.id AS category_id, c.name AS category_name, c.color AS category_color,
+                    c.sort_order AS category_sort,
                     {$st} AS status,
                     {$asg} AS assignee_id,
                     pt.assignee_id AS assignee_override,

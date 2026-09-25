@@ -14,7 +14,6 @@
  * @var array $by_product
  * @var array $by_category
  * @var array $upcoming
- * @var array $stalled
  * @var bool  $is_admin
  */
 $page_title = 'Dashboard';
@@ -197,8 +196,7 @@ $pctDone = (int) $totals['progress'];
   </section>
 </div>
 
-<div class="split">
-  <section class="card">
+<section class="card">
     <h2 class="card-h">Going live in the next 60 days</h2>
     <?php if (!$upcoming): ?>
       <p class="muted">Nothing has a target go-live date in the next 60 days.</p>
@@ -224,23 +222,5 @@ $pctDone = (int) $totals['progress'];
     <?php endif; ?>
   </section>
 
-  <section class="card">
-    <h2 class="card-h">Quiet for a while</h2>
-    <?php if (!$stalled): ?>
-      <p class="muted">Every active practice has had something recorded against it recently.</p>
-    <?php else: ?>
-      <p class="muted">
-        Active practices nothing has been recorded against lately. They raise no flags, which is
-        exactly why they slip.
-      </p>
-      <ul class="quiet-list">
-        <?php foreach ($stalled as $s): ?>
-          <li>
-            <a href="<?= e(url('practice', ['id' => (int) $s['id']])) ?>"><?= e($s['name']) ?></a>
-            <span class="muted"><?= (int) $s['quiet_days'] ?>d</span>
-          </li>
-        <?php endforeach; ?>
-      </ul>
-    <?php endif; ?>
-  </section>
+
 </div>

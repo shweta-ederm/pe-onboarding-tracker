@@ -87,40 +87,49 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
       </header>
     <?php endif; ?>
 
-    <div class="table-scroll">
-    <table class="grid all-grid">
-      <thead>
-        <tr>
-          <th>Practice</th><th>Task</th><th>Category</th>
-          <th>Status</th><th>Assignee</th><th>Due</th><th>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php foreach ($g['rows'] as $r):
-            $cls = '';
-            if ($r['status'] === 'completed')      { $cls = 'task-done'; }
-            if ($r['status'] === 'not_applicable') { $cls = 'task-na'; }
-            if ($r['status'] === 'blocked')        { $cls = 'task-blocked'; }
-            if (!empty($r['is_overdue']))          { $cls .= ' task-overdue'; }
-        ?>
-          <tr class="<?= trim($cls) ?>">
-            <td class="c-name">
-              <a href="<?= e(url('practice', ['id' => (int) $r['practice_id']])) ?>"><?= e($r['practice_name']) ?></a>
-            </td>
-            <td class="c-task"><?= e($r['task_name']) ?></td>
-            <td><span class="muted"><?= e($r['category_name']) ?></span></td>
-            <td><?php $status = (string) $r['status']; require APP_ROOT . '/templates/partials/status_badge.php'; ?></td>
-            <td><?= $r['assignee_name'] ? e($r['assignee_name']) : '<span class="muted">Unassigned</span>' ?></td>
-            <td class="c-due">
-              <?= e(fmt_date($r['due_date'] ?? null)) ?>
-              <?php if (!empty($r['is_overdue'])): ?><span class="chip chip-alert">Overdue</span><?php endif; ?>
-            </td>
-            <td class="c-notes-ro"><?= $r['notes'] ? e($r['notes']) : '<span class="muted">—</span>' ?></td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-    </div>
+    <?php foreach (Repo::groupRowsByCategory($g['rows']) as $cat): ?>
+      <div class="cat-group" style="--cat: <?= e($cat['category_color'] ?: '#94A3B8') ?>">
+        <h4 class="cat-h cat-h-tinted">
+          <span class="cat-swatch"></span>
+          <?= e($cat['category_name']) ?>
+          <span class="cat-count"><?= count($cat['rows']) ?></span>
+        </h4>
+
+        <div class="table-scroll">
+        <table class="grid all-grid">
+          <thead>
+            <tr>
+              <th>Practice</th><th>Task</th>
+              <th>Status</th><th>Assignee</th><th>Due</th><th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($cat['rows'] as $r):
+                $cls = '';
+                if ($r['status'] === 'completed')      { $cls = 'task-done'; }
+                if ($r['status'] === 'not_applicable') { $cls = 'task-na'; }
+                if ($r['status'] === 'blocked')        { $cls = 'task-blocked'; }
+                if (!empty($r['is_overdue']))          { $cls .= ' task-overdue'; }
+            ?>
+              <tr class="<?= trim($cls) ?>">
+                <td class="c-name">
+                  <a href="<?= e(url('practice', ['id' => (int) $r['practice_id']])) ?>"><?= e($r['practice_name']) ?></a>
+                </td>
+                <td class="c-task"><?= e($r['task_name']) ?></td>
+                <td><?php $status = (string) $r['status']; require APP_ROOT . '/templates/partials/status_badge.php'; ?></td>
+                <td><?= $r['assignee_name'] ? e($r['assignee_name']) : '<span class="muted">Unassigned</span>' ?></td>
+                <td class="c-due">
+                  <?= e(fmt_date($r['due_date'] ?? null)) ?>
+                  <?php if (!empty($r['is_overdue'])): ?><span class="chip chip-alert">Overdue</span><?php endif; ?>
+                </td>
+                <td class="c-notes-ro"><?= $r['notes'] ? e($r['notes']) : '<span class="muted">—</span>' ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    <?php endforeach; ?>
   </section>
 <?php endforeach; ?>
 

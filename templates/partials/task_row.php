@@ -5,9 +5,17 @@
  * @var array $t            derived task row
  * @var int   $practice_id
  * @var bool  $is_admin
+ * @var ?int  $member_id
  * @var array $assignees
  */
 $tid    = (int) $t['task_id'];
+
+// The administrator may change anything. A team member may change only
+// the tasks that are theirs. The server checks this again on save; this
+// just avoids showing controls that would be refused.
+$can_edit = !empty($is_admin)
+    || (isset($member_id) && $member_id !== null
+        && (int) ($t['assignee_id'] ?? 0) === (int) $member_id);
 $status = (string) $t['status'];
 $rowCls = 'task';
 if ($status === 'completed')      { $rowCls .= ' task-done'; }
@@ -15,9 +23,9 @@ if ($status === 'not_applicable') { $rowCls .= ' task-na'; }
 if ($status === 'blocked')        { $rowCls .= ' task-blocked'; }
 if (!empty($t['is_overdue']))     { $rowCls .= ' task-overdue'; }
 ?>
-<tr class="<?= $rowCls ?>" data-task="<?= $tid ?>">
+<tr class="<?= $rowCls ?><?= $can_edit ? ' task-mine' : '' ?>" data-task="<?= $tid ?>">
 
-  <?php if ($is_admin): ?>
+  <?php if ($can_edit): ?>
     <td class="c-check">
       <input type="checkbox" name="task_ids[]" value="<?= $tid ?>" class="bulk-check"
              aria-label="Select <?= e($t['task_name']) ?>">
@@ -41,7 +49,7 @@ if (!empty($t['is_overdue']))     { $rowCls .= ' task-overdue'; }
   </td>
 
   <td class="c-status">
-    <?php if ($is_admin): ?>
+    <?php if ($can_edit): ?>
       <select class="inline-input status-select <?= e(status_class($status)) ?>"
               data-field="status" data-task="<?= $tid ?>" data-practice="<?= (int) $practice_id ?>"
               aria-label="Status for <?= e($t['task_name']) ?>">
@@ -55,7 +63,7 @@ if (!empty($t['is_overdue']))     { $rowCls .= ' task-overdue'; }
   </td>
 
   <td class="c-assignee">
-    <?php if ($is_admin): ?>
+    <?php if ($can_edit): ?>
       <select class="inline-input" data-field="assignee_id" data-task="<?= $tid ?>"
               data-practice="<?= (int) $practice_id ?>"
               aria-label="Assignee for <?= e($t['task_name']) ?>">
@@ -73,7 +81,7 @@ if (!empty($t['is_overdue']))     { $rowCls .= ' task-overdue'; }
   </td>
 
   <td class="c-due">
-    <?php if ($is_admin): ?>
+    <?php if ($can_edit): ?>
       <input type="date" class="inline-input" value="<?= e($t['due_date'] ?? '') ?>"
              data-field="due_date" data-task="<?= $tid ?>" data-practice="<?= (int) $practice_id ?>"
              aria-label="Due date for <?= e($t['task_name']) ?>">
@@ -83,7 +91,7 @@ if (!empty($t['is_overdue']))     { $rowCls .= ' task-overdue'; }
   </td>
 
   <td class="c-notes">
-    <?php if ($is_admin): ?>
+    <?php if ($can_edit): ?>
       <textarea class="inline-input notes-input" rows="1" placeholder="Add a note"
                 data-field="notes" data-task="<?= $tid ?>" data-practice="<?= (int) $practice_id ?>"
                 aria-label="Notes for <?= e($t['task_name']) ?>"><?= e($t['notes'] ?? '') ?></textarea>
