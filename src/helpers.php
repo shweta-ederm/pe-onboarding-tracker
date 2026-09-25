@@ -112,6 +112,21 @@ function slugify(string $text): string
     return $s !== '' ? substr($s, 0, 190) : 'item';
 }
 
+/**
+ * Cache-busting URL for a file in public/.
+ *
+ * APP_VERSION was hardcoded, so browsers kept serving a stale
+ * stylesheet after every deploy and the only cure was a hard refresh.
+ * Keying it to the file's modification time means a deploy invalidates
+ * the cache by itself.
+ */
+function asset(string $file): string
+{
+    $path = APP_ROOT . '/public/' . ltrim($file, '/');
+    $v    = is_file($path) ? (string) filemtime($path) : APP_VERSION;
+    return $file . '?v=' . $v;
+}
+
 /** Send a redirect and stop. */
 function redirect(string $to)
 {

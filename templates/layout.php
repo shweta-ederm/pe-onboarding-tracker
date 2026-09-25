@@ -15,7 +15,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title><?= e($page_title ?? 'Onboarding') ?> · <?= e($config['app_name']) ?></title>
-<link rel="stylesheet" href="assets/app.css?v=<?= e(APP_VERSION) ?>">
+<link rel="stylesheet" href="<?= e(asset('assets/app.css')) ?>">
 </head>
 <body>
 
@@ -80,6 +80,6 @@
     statuses: <?= json_encode(STATUSES) ?>
   };
 </script>
-<script src="assets/app.js?v=<?= e(APP_VERSION) ?>"></script>
+<script src="<?= e(asset('assets/app.js')) ?>"></script>
 </body>
 </html>

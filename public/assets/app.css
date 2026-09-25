@@ -910,8 +910,11 @@ a.kpi:hover {
 
 /* All tasks: each category is its own block, with room above it so the
    heading belongs to what follows rather than to the table above. */
-.cat-group { margin-top: 1.75rem; }
-.cat-group:first-of-type { margin-top: .5rem; }
+.cat-group { margin-top: 2.25rem; }
+.cat-group:first-child { margin-top: .75rem; }
+/* Belt and braces: the gap should survive whatever precedes the block. */
+.cat-group + .cat-group { margin-top: 2.25rem; }
+.prod-block .table-scroll + .cat-group { margin-top: 2.25rem; }
 
 .cat-h-tinted {
   display: flex; align-items: center; gap: .5rem;
@@ -971,3 +974,28 @@ a.kpi:hover {
   padding: .6rem .65rem;
 }
 .purge-form { margin-left: .35rem; }
+
+
+/* ---------- People, as a table ---------- */
+
+.people-grid { table-layout: fixed; }
+.people-grid th, .people-grid td { vertical-align: middle; }
+.people-grid th:nth-child(1), .people-grid td:nth-child(1) { width: 20%; }
+.people-grid th:nth-child(2), .people-grid td:nth-child(2) { width: 20%; }
+.people-grid th:nth-child(3), .people-grid td:nth-child(3) { width: 20%; }
+.people-grid th:nth-child(4), .people-grid td:nth-child(4) { width: 6.5rem; }
+.people-grid th:nth-child(5), .people-grid td:nth-child(5) { width: 12rem; }
+.people-grid th:nth-child(6), .people-grid td:nth-child(6) { width: 4.5rem; }
+.people-grid th:nth-child(7), .people-grid td:nth-child(7) { width: 6rem; }
+.people-grid input[type="text"] { font-size: .8125rem; padding: .35rem .5rem; }
+
+/* The dirty highlight has to work on a table row too, not just a
+   grid line, now that People is a table. */
+tr.is-dirty > td { background: var(--warn-soft); }
+tr.is-dirty > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+table.grid tbody tr.is-dirty:hover > td { background: #FDF1DC; }
+
+@media (max-width: 900px) {
+  /* Below this the table scrolls sideways rather than squashing. */
+  .people-grid { min-width: 54rem; }
+}

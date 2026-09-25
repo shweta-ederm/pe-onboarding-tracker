@@ -2,9 +2,14 @@
 /**
  * Admin: people, who are also the user accounts.
  *
- * A person with a PIN can sign in with that PIN alone. They see
- * everything and may change only the tasks assigned to them. PINs are
- * stored hashed, so they can be replaced but never read back.
+ * A real table rather than a CSS grid. The row mixes text inputs, a
+ * badge, a small form and a checkbox, and with a grid the header and
+ * the fields kept drifting out of line because the action buttons sat
+ * outside the grid. A table cannot misalign.
+ *
+ * The editable cells belong to the empty form declared above via the
+ * HTML `form` attribute, so one Save button commits the whole table
+ * without any form wrapping table cells.
  *
  * @var array $rows
  */
@@ -37,47 +42,53 @@ $page_title = 'People';
       <button type="submit" class="btn btn-primary btn-sm">Add person</button>
     </div>
   </form>
-  <p class="muted">
-    Leave the PIN blank for somebody who should be assignable but not able to sign in.
-  </p>
+  <p class="muted">Leave the PIN blank for somebody who should be assignable but not able to sign in.</p>
 </section>
 
 <form method="post" action="<?= e(url('assignees-save-all')) ?>" id="gridform"><?= Csrf::field() ?></form>
 
-<div class="edit-rows cols-person" data-grid>
-  <div class="edit-head">
-    <span>First name</span><span>Last name</span><span>Role</span>
-    <span class="ta-c">Sign-in</span><span>Set a new PIN</span><span class="ta-c">Active</span>
-  </div>
-
-  <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
-    <div class="edit-line <?= empty($r['is_active']) ? 'is-off' : '' ?>" data-row="<?= $id ?>">
-      <div class="edit-row">
-        <label class="cell"><span class="cell-lab">First name</span>
+<div class="table-scroll">
+<table class="grid people-grid" data-grid>
+  <thead>
+    <tr>
+      <th>First name</th>
+      <th>Last name</th>
+      <th>Role</th>
+      <th class="ta-c">Sign-in</th>
+      <th>Set a new PIN</th>
+      <th class="ta-c">Active</th>
+      <th class="c-act"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
+      <tr data-row="<?= $id ?>" class="<?= empty($r['is_active']) ? 'row-muted' : '' ?>">
+        <td>
           <input form="gridform" type="text" maxlength="80" name="rows[<?= $id ?>][first_name]"
-                 value="<?= e($r['first_name'] ?? '') ?>"></label>
-
-        <label class="cell"><span class="cell-lab">Last name</span>
+                 value="<?= e($r['first_name'] ?? '') ?>" aria-label="First name">
+        </td>
+        <td>
           <input form="gridform" type="text" maxlength="80" name="rows[<?= $id ?>][last_name]"
-                 value="<?= e($r['last_name'] ?? '') ?>"></label>
-
-        <label class="cell"><span class="cell-lab">Role</span>
+                 value="<?= e($r['last_name'] ?? '') ?>" aria-label="Last name">
+        </td>
+        <td>
           <input form="gridform" type="text" maxlength="120" name="rows[<?= $id ?>][role_title]"
-                 value="<?= e($r['role_title'] ?? '') ?>"></label>
+                 value="<?= e($r['role_title'] ?? '') ?>" aria-label="Role">
+        </td>
 
-        <span class="cell ta-c"><span class="cell-lab">Sign-in</span>
+        <td class="ta-c">
           <?php if (!empty($r['pin_hash'])): ?>
             <span class="badge st-completed" title="<?= $r['last_login']
                 ? 'Last signed in ' . e(fmt_ago($r['last_login'])) : 'Has never signed in' ?>">Yes</span>
           <?php else: ?>
             <span class="badge st-not-started" title="Assignable, but cannot sign in">No PIN</span>
           <?php endif; ?>
-        </span>
+        </td>
 
-        <?php /* Its own form, sitting in the grid so the column lines up.
-                 Kept separate from the grid form, so setting a PIN can
-                 never ride along with a Save by accident. */ ?>
-        <span class="cell"><span class="cell-lab">Set a new PIN</span>
+        <td>
+          <?php /* Its own form, kept out of the grid form so setting a
+                   PIN can never ride along with a Save by accident. A
+                   form inside a cell is fine; one wrapping cells is not. */ ?>
           <form method="post" action="<?= e(url('assignee-pin')) ?>" class="pin-form" data-leaves-page>
             <?= Csrf::field() ?>
             <input type="hidden" name="id" value="<?= $id ?>">
@@ -86,31 +97,34 @@ $page_title = 'People';
                    aria-label="New PIN for <?= e($r['name']) ?>">
             <button type="submit" class="btn btn-quiet btn-xs">Set</button>
           </form>
-        </span>
+        </td>
 
-        <label class="cell ta-c"><span class="cell-lab">Active</span>
+        <td class="ta-c">
           <input form="gridform" type="hidden" name="rows[<?= $id ?>][is_active]" value="0">
           <input form="gridform" type="checkbox" name="rows[<?= $id ?>][is_active]" value="1"
-                 <?= !empty($r['is_active']) ? 'checked' : '' ?>></label>
-      </div>
+                 <?= !empty($r['is_active']) ? 'checked' : '' ?>
+                 aria-label="<?= e($r['name']) ?> is active">
+        </td>
 
-      <span class="edit-row-side">
-        <form method="post" action="<?= e(url('assignee-delete')) ?>" class="inline-form" data-leaves-page
-              data-confirm="Remove <?= e($r['name']) ?>? If they hold assignments, they will be deactivated instead of deleted.">
-          <?= Csrf::field() ?>
-          <input type="hidden" name="id" value="<?= $id ?>">
-          <button type="submit" class="btn btn-danger btn-xs">Remove</button>
-        </form>
-      </span>
-    </div>
-  <?php endforeach; ?>
+        <td class="c-act">
+          <form method="post" action="<?= e(url('assignee-delete')) ?>" class="inline-form" data-leaves-page
+                data-confirm="Remove <?= e($r['name']) ?>? If they hold assignments, they will be deactivated instead of deleted.">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="id" value="<?= $id ?>">
+            <button type="submit" class="btn btn-danger btn-xs">Remove</button>
+          </form>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+  </tbody>
+</table>
 </div>
 
 <?php require APP_ROOT . '/templates/partials/savebar.php'; ?>
 
 <p class="table-note">
   People sign in with their PIN alone, so every PIN has to be different. If you type one that is
-  already in use, it will be refused. PINs are stored scrambled and cannot be read back, by you or
+  already in use it will be refused. PINs are stored scrambled and cannot be read back, by you or
   anyone else, so if somebody forgets theirs, set a new one and tell them what it is.
 </p>
 <p class="table-note">
