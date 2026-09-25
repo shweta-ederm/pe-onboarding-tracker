@@ -31,7 +31,7 @@
     <nav class="nav" aria-label="Main">
       <a href="<?= e(url('dashboard')) ?>" <?= ($template === 'dashboard') ? 'class="on" aria-current="page"' : '' ?>>Dashboard</a>
       <a href="<?= e(url('practices')) ?>" <?= ($template === 'practices' || str_starts_with($template, 'admin/practice')) ? 'class="on" aria-current="page"' : '' ?>>Practices</a>
-      <a href="<?= e(url('tasks')) ?>" <?= ($template === 'tasks') ? 'class="on" aria-current="page"' : '' ?>>All tasks</a>
+      <a href="<?= e(url('tasks')) ?>" <?= ($template === 'tasks') ? 'class="on" aria-current="page"' : '' ?>><?= Auth::isMember() ? 'Tasks' : 'All tasks' ?></a>
       <?php if ($is_admin): ?>
         <a href="<?= e(url('admin/tasks')) ?>" <?= ($template === 'admin/tasks') ? 'class="on"' : '' ?>>Task library</a>
         <a href="<?= e(url('admin/products')) ?>" <?= ($template === 'admin/products') ? 'class="on"' : '' ?>>Products</a>

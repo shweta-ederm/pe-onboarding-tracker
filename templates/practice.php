@@ -20,6 +20,7 @@
  */
 $page_title  = (string) $practice['name'];
 $practice_id = (int) $practice['id'];
+$mine        = $member_id !== null && ($filters['scope'] ?? 'mine') !== 'all';
 $days        = days_until($practice['target_go_live_date'] ?? null);
 ?>
 
@@ -132,10 +133,10 @@ $days        = days_until($practice['target_go_live_date'] ?? null);
   </section>
 </div>
 
-<h2 class="section-h">Onboarding tasks</h2>
+<h2 class="section-h"><?= $mine ? 'My tasks here' : 'Onboarding tasks' ?></h2>
 
 <?php
-$show = ['q', 'product', 'category', 'status', 'assignee', 'flags', 'completed'];
+$show = ['q', 'product', 'category', 'status', 'assignee', 'flags', 'completed', 'scope'];
 $filter_page = 'practice';
 require APP_ROOT . '/templates/partials/filter_bar.php';
 ?>
@@ -175,7 +176,10 @@ require APP_ROOT . '/templates/partials/filter_bar.php';
   <div class="empty">
     <h3>No tasks to show</h3>
     <p>
-      <?php if ($filtered): ?>
+      <?php if ($mine): ?>
+        None of this practice's tasks are assigned to you.
+        <a href="<?= e(url_with(['scope' => 'all'])) ?>">See everyone's tasks here</a>.
+      <?php elseif ($filtered): ?>
         Nothing matches those filters.
       <?php elseif (!$products): ?>
         This practice has no products selected.

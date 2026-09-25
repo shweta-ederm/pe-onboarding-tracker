@@ -999,3 +999,24 @@ table.grid tbody tr.is-dirty:hover > td { background: #FDF1DC; }
   /* Below this the table scrolls sideways rather than squashing. */
   .people-grid { min-width: 54rem; }
 }
+
+
+/* ---------- My tasks / Everyone toggle ---------- */
+
+.f-scope { min-width: 0; }
+.seg {
+  display: inline-flex; background: var(--surface-3);
+  border-radius: var(--radius-s); padding: 2px; gap: 2px;
+}
+.seg-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 1.9rem; padding: 0 .8rem; border-radius: 6px;
+  font-size: .8125rem; font-weight: 500; color: var(--ink-2);
+  white-space: nowrap;
+  transition: background .12s var(--ease), color .12s var(--ease), box-shadow .12s var(--ease);
+}
+.seg-btn:hover { color: var(--ink); text-decoration: none; }
+.seg-btn.on {
+  background: var(--surface); color: var(--accent-ink); font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}

@@ -634,6 +634,33 @@ final class Repo
         );
     }
 
+    /** One person's open workload, for their dashboard card. */
+    public static function openCountsFor(int $assigneeId): array
+    {
+        $st    = self::ST;
+        $asg   = self::ASG;
+        $joins = self::openTasksJoins();
+        $where = self::openTasksWhere();
+
+        $row = Database::one(
+            "SELECT COUNT(*) AS open_count,
+                    SUM(CASE WHEN {$st} = 'blocked' THEN 1 ELSE 0 END) AS blocked,
+                    SUM(CASE WHEN pt.due_date IS NOT NULL AND pt.due_date < CURDATE()
+                             THEN 1 ELSE 0 END) AS overdue
+               {$joins}
+               {$where}
+                 AND {$st} NOT IN ('completed','not_applicable')
+                 AND {$asg} = :me",
+            ['me' => $assigneeId]
+        );
+
+        return [
+            'open_count' => (int) ($row['open_count'] ?? 0),
+            'blocked'    => (int) ($row['blocked'] ?? 0),
+            'overdue'    => (int) ($row['overdue'] ?? 0),
+        ];
+    }
+
     /** Open work per product. */
     public static function openByProduct(): array
     {

@@ -17,6 +17,11 @@ $has  = static fn(string $k): bool => in_array($k, $show, true);
 // Anything not represented by a control is carried through so the sort
 // order and the current practice survive a filter change.
 $carry = ['sort' => $_GET['sort'] ?? null, 'dir' => $_GET['dir'] ?? null, 'id' => $_GET['id'] ?? null];
+
+// Keep the chosen scope when any other filter is applied.
+if (($_GET['scope'] ?? '') === 'all' && !in_array('scope', $show, true)) {
+    $carry['scope'] = 'all';
+}
 ?>
 <form class="filters" method="get" action="index.php">
   <input type="hidden" name="p" value="<?= e($filter_page) ?>">
@@ -85,7 +90,32 @@ $carry = ['sort' => $_GET['sort'] ?? null, 'dir' => $_GET['dir'] ?? null, 'id' =
     </label>
   <?php endif; ?>
 
-  <?php if ($has('assignee') && !empty($assignees)): ?>
+  <?php
+    // A member sees their own work by default. While that is so, the
+    // assignee dropdown is hidden: it could only contradict the toggle.
+    $me       = Auth::memberId();
+    $isMine   = $me !== null && ($filters['scope'] ?? 'mine') !== 'all';
+    $showWho  = $has('assignee') && !empty($assignees) && !$isMine;
+  ?>
+
+  <?php if ($me !== null && $has('scope')): ?>
+    <div class="f-field f-scope">
+      <span>Show</span>
+      <div class="seg" role="group" aria-label="Whose tasks to show">
+        <a class="seg-btn <?= $isMine ? 'on' : '' ?>"
+           href="<?= e(url_with(['scope' => null])) ?>"
+           <?= $isMine ? 'aria-current="true"' : '' ?>>My tasks</a>
+        <a class="seg-btn <?= $isMine ? '' : 'on' ?>"
+           href="<?= e(url_with(['scope' => 'all'])) ?>"
+           <?= $isMine ? '' : 'aria-current="true"' ?>>Everyone</a>
+      </div>
+    </div>
+    <?php if (!$isMine): ?>
+      <input type="hidden" name="scope" value="all">
+    <?php endif; ?>
+  <?php endif; ?>
+
+  <?php if ($showWho): ?>
     <label class="f-field">
       <span>Assignee</span>
       <select name="assignee_id">

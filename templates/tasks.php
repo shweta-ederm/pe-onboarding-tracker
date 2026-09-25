@@ -15,15 +15,18 @@
  * @var array $categories
  * @var array $assignees
  * @var bool  $is_admin
+ * @var ?int  $member_id
  */
-$page_title = 'All tasks';
+$mine       = $member_id !== null && ($filters['scope'] ?? 'mine') !== 'all';
+$page_title = $mine ? 'My tasks' : 'All tasks';
 ?>
 
 <div class="page-head">
   <div>
-    <h1>All tasks</h1>
+    <h1><?= $mine ? 'My tasks' : 'All tasks' ?></h1>
     <p class="sub">
-      <?= count($rows) ?> task<?= count($rows) === 1 ? '' : 's' ?> across every active practice.
+      <?= count($rows) ?> task<?= count($rows) === 1 ? '' : 's' ?>
+      <?= $mine ? 'assigned to you' : 'across every active practice' ?>.
       <?php if ((int) $rollup['blocked'] > 0 || (int) $rollup['overdue'] > 0): ?>
         <strong><?= (int) $rollup['blocked'] ?></strong> blocked,
         <strong><?= (int) $rollup['overdue'] ?></strong> overdue.
@@ -36,15 +39,23 @@ $page_title = 'All tasks';
 </div>
 
 <?php
-$show = ['q', 'practice', 'product', 'category', 'status', 'assignee', 'flags', 'completed'];
+$show = ['q', 'practice', 'product', 'category', 'status', 'assignee', 'flags', 'completed', 'scope'];
 $filter_page = 'tasks';
 require APP_ROOT . '/templates/partials/filter_bar.php';
 ?>
 
 <?php if (!$rows): ?>
   <div class="empty">
-    <h2>Nothing matches</h2>
-    <p>Try clearing the filters above.</p>
+    <?php if ($mine): ?>
+      <h2>Nothing is assigned to you right now</h2>
+      <p>
+        Either your work here is done, or it has not been handed out yet.
+        <a href="<?= e(url_with(['scope' => 'all'])) ?>">See everyone's tasks</a>.
+      </p>
+    <?php else: ?>
+      <h2>Nothing matches</h2>
+      <p>Try clearing the filters above.</p>
+    <?php endif; ?>
   </div>
 <?php else: ?>
 

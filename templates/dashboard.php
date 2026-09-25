@@ -14,7 +14,9 @@
  * @var array $by_product
  * @var array $by_category
  * @var array $upcoming
+ * @var ?array $my_work   the signed-in member's own open workload
  * @var bool  $is_admin
+ * @var ?int  $member_id
  */
 $page_title = 'Dashboard';
 
@@ -48,6 +50,22 @@ $pctDone = (int) $totals['progress'];
 
 <section class="kpis" aria-label="Headline numbers">
 
+  <?php /* A team member's first question is their own workload; the
+           administrator's is the portfolio. */ ?>
+  <?php if ($my_work !== null): ?>
+  <a class="kpi kpi-blue" href="<?= e(url('tasks')) ?>">
+    <span class="kpi-label">My open tasks</span>
+    <span class="kpi-value"><?= (int) $my_work['open_count'] ?></span>
+    <span class="kpi-foot">
+      <?php if ((int) $my_work['blocked'] > 0 || (int) $my_work['overdue'] > 0): ?>
+        <?= (int) $my_work['blocked'] ?> blocked · <?= (int) $my_work['overdue'] ?> overdue
+      <?php elseif ((int) $my_work['open_count'] === 0): ?>
+        nothing outstanding
+      <?php else: ?>
+        none blocked or overdue
+      <?php endif; ?>
+    </span>
+  <?php else: ?>
   <a class="kpi kpi-blue" href="<?= e(url('practices')) ?>">
     <span class="kpi-label">Practices in flight</span>
     <span class="kpi-value"><?= (int) $totals['practices'] ?></span>
@@ -55,6 +73,7 @@ $pctDone = (int) $totals['progress'];
       <?= (int) $health['on_track'] ?> on track
       <?php if ((int) $health['on_hold'] > 0): ?> · <?= (int) $health['on_hold'] ?> on hold<?php endif; ?>
     </span>
+  <?php endif; ?>
     <svg class="kpi-art" viewBox="0 0 120 40" aria-hidden="true">
       <path d="M0 32 L20 26 L40 28 L60 18 L80 20 L100 10 L120 6" fill="none"
             stroke="rgba(255,255,255,.55)" stroke-width="2.5" stroke-linecap="round"/>

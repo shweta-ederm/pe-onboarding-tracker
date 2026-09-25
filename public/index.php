@@ -50,6 +50,27 @@ function not_found(string $message = 'That page does not exist.'): void
 // Filters read from the query string
 // ---------------------------------------------------------------------
 
+/**
+ * Narrow a filter set to the signed-in member's own work.
+ *
+ * A member defaults to their own tasks. The assignee dropdown is hidden
+ * while that is the case, so the two can never contradict each other.
+ * For the administrator this does nothing: the admin PIN is not linked
+ * to a person, so "mine" has no meaning.
+ */
+function apply_scope(array $f): array
+{
+    $me = Auth::memberId();
+    if ($me === null) {
+        $f['scope'] = 'all';
+        return $f;
+    }
+    if (($f['scope'] ?? 'mine') === 'mine') {
+        $f['assignee_id'] = $me;
+    }
+    return $f;
+}
+
 function read_filters(): array
 {
     return [
@@ -68,6 +89,9 @@ function read_filters(): array
         // Completed work is hidden unless asked for. Progress figures
         // always count it; this only affects what is listed.
         'show_completed' => !empty($_GET['completed']),
+        // Team members see their own work first. 'mine' or 'all'.
+        // Meaningless for the administrator, who is not a person.
+        'scope'          => ((string) ($_GET['scope'] ?? '')) === 'all' ? 'all' : 'mine',
         'include_archived' => !empty($_GET['archived']),
         'sort'         => (string) ($_GET['sort'] ?? 'name'),
         'dir'          => (($_GET['dir'] ?? 'asc') === 'desc') ? 'desc' : 'asc',
@@ -1146,9 +1170,12 @@ switch ($route) {
             }
         }
 
+        $me = Auth::memberId();
+
         render('dashboard', [
             'totals'      => $totals,
             'health'      => $health,
+            'my_work'     => $me !== null ? Repo::openCountsFor($me) : null,
             'by_status'   => Repo::countsByStatus(),
             'by_assignee' => Repo::openByAssignee(),
             'by_product'  => Repo::openByProduct(),
@@ -1179,10 +1206,11 @@ switch ($route) {
             not_found('That practice does not exist.');
         }
 
-        $f = read_filters();
+        $f = apply_scope(read_filters());
 
         // Unfiltered rows drive the progress figures, so neither the
-        // filters nor hiding completed work changes the percentages.
+        // filters, hiding completed work, nor the My tasks scope
+        // changes the percentages.
         $allRows      = Repo::practiceTasks($id, ['show_completed' => true]);
         $filteredRows = Repo::practiceTasks($id, $f);
 
@@ -1217,7 +1245,7 @@ switch ($route) {
     }
 
     case 'tasks': {
-        $f    = read_filters();
+        $f    = apply_scope(read_filters());
         $rows = Repo::tasksAcrossPractices($f);
         render('tasks', [
             'rows'       => $rows,
@@ -1233,7 +1261,7 @@ switch ($route) {
     }
 
     case 'export': {
-        $f     = read_filters();
+        $f     = apply_scope(read_filters());
         $rows  = Repo::tasksAcrossPractices($f, 5000);
         $stamp = date('Y-m-d');
 
