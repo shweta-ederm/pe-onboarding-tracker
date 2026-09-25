@@ -548,7 +548,13 @@ a.mini-name:hover { color: var(--accent); }
 .edit-head {
   padding: .8rem 1.15rem; border-bottom: 1px solid var(--line);
   font-size: .75rem; font-weight: 500; color: var(--ink-3);
+  /* Leave room for the action buttons, which sit outside the grid. */
+  padding-right: calc(var(--side-w, 5.5rem) + 1.75rem);
 }
+.cols-product  { --side-w: 5.5rem; }
+.cols-category { --side-w: 5.5rem; }
+.cols-person   { --side-w: 5.5rem; }
+.cols-task     { --side-w: 11rem; }
 .edit-line {
   display: flex; align-items: center; gap: .6rem;
   padding: .7rem 1.15rem; border-bottom: 1px solid var(--line);
@@ -902,32 +908,47 @@ a.kpi:hover {
 
 /* ---------- Category grouping ---------- */
 
-.cat-group { margin-bottom: 1.1rem; }
+/* All tasks: each category is its own block, with room above it so the
+   heading belongs to what follows rather than to the table above. */
+.cat-group { margin-top: 1.75rem; }
+.cat-group:first-of-type { margin-top: .5rem; }
+
 .cat-h-tinted {
-  background: color-mix(in srgb, var(--cat) 9%, transparent);
+  display: flex; align-items: center; gap: .5rem;
+  background: color-mix(in srgb, var(--cat) 10%, transparent);
   border-left: 3px solid var(--cat);
   border-radius: var(--radius-xs);
-  padding: .4rem .65rem; margin-bottom: .45rem;
-  color: var(--ink-2); font-weight: 600;
+  padding: .5rem .75rem; margin-bottom: .6rem;
+  color: var(--ink); font-size: .8125rem; font-weight: 600;
+  letter-spacing: .01em;
+}
+.cat-h-tinted .cat-count {
+  background: color-mix(in srgb, var(--cat) 18%, transparent);
+  color: var(--ink-2);
 }
 .cat-swatch {
-  width: 8px; height: 8px; border-radius: 2px;
+  width: 9px; height: 9px; border-radius: 3px;
   background: var(--cat); display: inline-block; flex: none;
 }
-.cat-divider {
-  display: flex; align-items: center; gap: .45rem;
-  padding: .5rem 1.15rem; font-size: .75rem; font-weight: 600;
-  color: var(--ink-2); letter-spacing: .01em;
-  background: color-mix(in srgb, var(--cat) 8%, var(--surface-2));
-  border-top: 1px solid var(--line);
-  border-left: 3px solid var(--cat);
-}
-.edit-rows .cat-divider:first-child { border-top: 0; }
-.cols-task .edit-line { border-left: 3px solid color-mix(in srgb, var(--cat) 55%, transparent); }
 
-/* Browsers without color-mix still get a readable, if flatter, grouping. */
+/* Task library: a full-width banner between groups, so the list reads
+   as sections rather than one run of rows. */
+.cat-divider {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .7rem 1.15rem; margin-top: .9rem;
+  font-size: .8125rem; font-weight: 600; letter-spacing: .01em;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--cat) 12%, var(--surface));
+  border-top: 1px solid color-mix(in srgb, var(--cat) 25%, var(--line));
+  border-bottom: 1px solid color-mix(in srgb, var(--cat) 25%, var(--line));
+  border-left: 4px solid var(--cat);
+}
+.edit-rows .cat-divider:first-of-type { margin-top: 0; border-top: 0; }
+.cols-task .edit-line { border-left: 4px solid color-mix(in srgb, var(--cat) 30%, transparent); }
+
 @supports not (color: color-mix(in srgb, red 10%, blue)) {
   .cat-h-tinted, .cat-divider { background: var(--surface-3); }
+  .cat-divider { border-top-color: var(--line-2); border-bottom-color: var(--line-2); }
   .cols-task .edit-line { border-left-color: var(--line-2); }
 }
 
@@ -938,8 +959,15 @@ a.kpi:hover {
 .who { font-size: .8125rem; color: var(--ink-2); font-weight: 500; }
 
 /* Setting a PIN, and destructive actions that re-ask for one. */
-.pin-form, .purge-form { display: inline-flex; gap: .3rem; align-items: center; margin: 0; }
-.pin-form input, .purge-form input {
-  width: 6.5rem; font-size: .75rem; padding: .25rem .4rem; min-width: 0;
+.pin-form, .purge-form { display: flex; gap: .3rem; align-items: center; margin: 0; }
+.pin-form input { flex: 1 1 auto; min-width: 0; font-size: .8125rem; }
+.pin-form .btn { flex: none; }
+.purge-form { display: inline-flex; margin-left: .35rem; }
+.purge-form input { width: 6.5rem; font-size: .75rem; padding: .25rem .4rem; min-width: 0; }
+
+/* The sign-in PIN box, large enough to feel deliberate. */
+.pin-input {
+  font-size: 1.25rem; letter-spacing: .3em; text-align: center;
+  padding: .6rem .65rem;
 }
 .purge-form { margin-left: .35rem; }

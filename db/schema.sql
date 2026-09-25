@@ -37,10 +37,11 @@ CREATE TABLE IF NOT EXISTS categories (
   KEY ix_categories_order (sort_order, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- People are also the user accounts. A person with a username and a
--- PIN can sign in. They see everything and may change only the tasks
--- assigned to them. `name` is a denormalised display name kept in step
--- with first_name and last_name on every save.
+-- People are also the user accounts. A person with a PIN can sign in
+-- with that PIN alone. They see everything and may change only the
+-- tasks assigned to them. `name` is a denormalised display name kept in
+-- step with first_name and last_name on every save. `username` is no
+-- longer used and is kept only so the change stays reversible.
 CREATE TABLE IF NOT EXISTS assignees (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   first_name   VARCHAR(80) NOT NULL DEFAULT '',
@@ -53,7 +54,6 @@ CREATE TABLE IF NOT EXISTS assignees (
   is_active    TINYINT(1) NOT NULL DEFAULT 1,
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_assignees_username (username),
   KEY ix_assignees_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -171,6 +171,16 @@ CREATE TABLE IF NOT EXISTS app_settings (
   setting_value TEXT DEFAULT NULL,
   updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Failed sign-in attempts, counted per address. Kept in the database
+-- rather than the session, which an attacker can simply discard.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ip           VARBINARY(16) NOT NULL,
+  attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY ix_attempts_ip_time (ip, attempted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS schema_migrations (

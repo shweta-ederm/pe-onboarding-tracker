@@ -6,11 +6,13 @@ declare(strict_types=1);
  *
  * Three states:
  *
+ * Two kinds of user, and a locked door:
+ *
  *   admin   The global administrator. Signs in with the PIN in
  *           config/config.php. May do anything.
- *   member  A person from the People screen. Signs in with their
- *           username and 6-digit PIN. Sees everything, and may change
- *           only the tasks assigned to them.
+ *   member  A person from the People screen. Signs in with their own
+ *           6-digit PIN. Sees everything, and may change only the
+ *           tasks assigned to them.
  *   guest   Not signed in. Sees the sign-in page and nothing else.
  *
  * Every permission question is answered here, and every answer is
@@ -180,93 +182,137 @@ final class Auth
     }
 
     /**
-     * Try the global administrator PIN.
+     * One PIN box. It is matched against the administrator PIN first,
+     * then against every active person.
+     *
+     * Because the PIN is the only credential, a wrong one is counted
+     * against the caller's address in the database, not the session,
+     * so clearing cookies does not reset the count.
+     *
      * Returns an error message, or null on success.
      */
-    public static function attemptAdmin(string $pin): ?string
+    public static function attempt(string $pin): ?string
     {
         if ($err = self::throttle()) {
             return $err;
         }
-        if (!self::pinConfigured()) {
-            return 'No administrator PIN is configured yet. Set admin_pin_hash in config/config.php.';
+
+        $pin = trim($pin);
+
+        // The administrator first.
+        if (self::pinConfigured() && password_verify($pin, (string) self::$config['admin_pin_hash'])) {
+            usleep(200000);
+            self::startSession();
+            $_SESSION['is_admin'] = true;
+            return null;
         }
 
-        $ok = password_verify($pin, (string) self::$config['admin_pin_hash']);
-        usleep(250000);
+        // Then each person who has a PIN. Hashes are salted, so there is
+        // no way to look one up; each has to be verified in turn. With a
+        // team of this size that is a handful of comparisons.
+        $people = Database::all(
+            'SELECT id, pin_hash FROM assignees
+              WHERE is_active = 1 AND pin_hash IS NOT NULL AND pin_hash <> \'\''
+        );
 
-        if (!$ok) {
-            self::recordFailure();
-            return 'That PIN was not recognised.';
+        foreach ($people as $person) {
+            if (password_verify($pin, (string) $person['pin_hash'])) {
+                usleep(200000);
+                self::startSession();
+                $_SESSION['member_id'] = (int) $person['id'];
+                self::$memberCache = null;
+                Database::run('UPDATE assignees SET last_login = NOW() WHERE id = :id',
+                    ['id' => (int) $person['id']]);
+                return null;
+            }
         }
 
-        self::startSession();
-        $_SESSION['is_admin'] = true;
-        return null;
+        usleep(200000);
+        self::recordFailure();
+        return 'That PIN was not recognised.';
     }
 
     /**
-     * Try a team member's username and PIN.
-     * Returns an error message, or null on success.
+     * Is this PIN already somebody's? Called before setting one, because
+     * two people sharing a PIN would make sign-in ambiguous.
      */
-    public static function attemptMember(string $username, string $pin): ?string
+    public static function pinInUse(string $pin, ?int $exceptId = null): bool
     {
-        if ($err = self::throttle()) {
-            return $err;
+        if (self::pinConfigured() && password_verify($pin, (string) self::$config['admin_pin_hash'])) {
+            return true;
         }
-
-        $username = trim($username);
-        $row = $username === '' ? null : Database::one(
-            'SELECT * FROM assignees WHERE username = :u AND is_active = 1',
-            ['u' => $username]
+        $rows = Database::all(
+            'SELECT id, pin_hash FROM assignees WHERE pin_hash IS NOT NULL AND pin_hash <> \'\''
         );
-
-        // Verify against a dummy hash when the user does not exist, so a
-        // wrong username and a wrong PIN take the same time to fail.
-        $hash = $row['pin_hash'] ?? '$2y$10$usesomesillystringfoeleven.eKvjWMR7BnHqMYBQ0K0ZyQZFZ0oS';
-        $ok   = password_verify($pin, (string) $hash) && $row && !empty($row['pin_hash']);
-        usleep(250000);
-
-        if (!$ok) {
-            self::recordFailure();
-            return 'That username and PIN did not match. Ask your administrator if you need a new PIN.';
+        foreach ($rows as $r) {
+            if ($exceptId !== null && (int) $r['id'] === $exceptId) {
+                continue;
+            }
+            if (password_verify($pin, (string) $r['pin_hash'])) {
+                return true;
+            }
         }
-
-        self::startSession();
-        $_SESSION['member_id'] = (int) $row['id'];
-        self::$memberCache = null;
-
-        Database::run('UPDATE assignees SET last_login = NOW() WHERE id = :id', ['id' => (int) $row['id']]);
-        return null;
+        return false;
     }
 
     private static function startSession(): void
     {
-        unset($_SESSION['login_tries']);
+        // A successful sign-in clears the failures for this address.
+        try {
+            Database::run('DELETE FROM login_attempts WHERE ip = :ip', ['ip' => self::ipKey()]);
+        } catch (Throwable $ex) {
+            error_log('could not clear sign-in failures: ' . $ex->getMessage());
+        }
         session_regenerate_id(true);
         $_SESSION['signed_in_at'] = time();
     }
 
-    /** Slow down guessing of a six-digit PIN. */
+    /** The caller's address, packed, for the attempts table. */
+    private static function ipKey(): string
+    {
+        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        $packed = @inet_pton($ip);
+        return $packed !== false ? $packed : inet_pton('0.0.0.0');
+    }
+
+    /**
+     * Refuse further attempts after too many failures from one address
+     * in fifteen minutes. Counted in the database rather than the
+     * session, so it survives the cookie being thrown away.
+     */
     private static function throttle(): ?string
     {
-        $now   = time();
-        $tries = array_values(array_filter(
-            (array) ($_SESSION['login_tries'] ?? []),
-            static fn($t) => ($now - (int) $t) < 900
-        ));
-        $_SESSION['login_tries'] = $tries;
+        try {
+            $n = (int) Database::scalar(
+                'SELECT COUNT(*) FROM login_attempts
+                  WHERE ip = :ip AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)',
+                ['ip' => self::ipKey()]
+            );
+        } catch (Throwable $ex) {
+            // If the table is missing, fail closed on counting but let
+            // people in, rather than locking everybody out of the portal.
+            error_log('login throttle unavailable: ' . $ex->getMessage());
+            return null;
+        }
 
-        return count($tries) >= 8
-            ? 'Too many attempts. Wait 15 minutes and try again.'
+        return $n >= 10
+            ? 'Too many incorrect PINs from this connection. Wait 15 minutes and try again.'
             : null;
     }
 
     private static function recordFailure(): void
     {
-        $tries = (array) ($_SESSION['login_tries'] ?? []);
-        $tries[] = time();
-        $_SESSION['login_tries'] = $tries;
+        try {
+            Database::run('INSERT INTO login_attempts (ip) VALUES (:ip)', ['ip' => self::ipKey()]);
+            // Keep the table from growing without limit.
+            if (random_int(1, 50) === 1) {
+                Database::run(
+                    'DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 1 DAY)'
+                );
+            }
+        } catch (Throwable $ex) {
+            error_log('could not record a failed sign-in: ' . $ex->getMessage());
+        }
     }
 
     public static function logout(): void

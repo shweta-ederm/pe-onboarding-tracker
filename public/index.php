@@ -312,11 +312,7 @@ if ($method === 'POST') {
     Csrf::requireValid();
 
     if ($route === 'login') {
-        $mode = ((string) ($_POST['mode'] ?? 'member')) === 'admin' ? 'admin' : 'member';
-
-        $err = $mode === 'admin'
-            ? Auth::attemptAdmin((string) ($_POST['pin'] ?? ''))
-            : Auth::attemptMember((string) ($_POST['username'] ?? ''), (string) ($_POST['pin'] ?? ''));
+        $err = Auth::attempt((string) ($_POST['pin'] ?? ''));
 
         if ($err === null) {
             Activity::log('auth', 'login', null, null, null, null, null, null,
@@ -324,11 +320,7 @@ if ($method === 'POST') {
             $next = (string) ($_POST['next'] ?? '');
             redirect($next !== '' && str_starts_with($next, 'index.php') ? $next : url('dashboard'));
         }
-        render('login', [
-            'error' => $err,
-            'next'  => (string) ($_POST['next'] ?? ''),
-            'mode'  => $mode,
-        ]);
+        render('login', ['error' => $err, 'next' => (string) ($_POST['next'] ?? '')]);
         exit;
     }
 
@@ -533,32 +525,12 @@ if ($method === 'POST') {
         }
 
         case 'assignees-save-all': {
-            $rows = (array) ($_POST['rows'] ?? []);
-
-            foreach ($rows as $id => $vals) {
-                if (!isset($vals['username'])) {
-                    continue;
-                }
-                $u = strtolower(trim((string) $vals['username']));
-                if ($u !== '' && !preg_match('/^[a-z0-9._-]{3,60}$/', $u)) {
-                    unset($rows[$id]['username']);
-                } else {
-                    $rows[$id]['username'] = $u !== '' ? $u : null;
-                }
-            }
-
-            try {
-                $r = save_grid('assignees', 'assignee', [
-                    'first_name' => 'str',
-                    'last_name'  => 'strnull',
-                    'username'   => 'strnull',
-                    'role_title' => 'strnull',
-                    'is_active'  => 'bool',
-                ], $rows, ['first_name']);
-            } catch (PDOException $ex) {
-                flash('Two people cannot share a username. Nothing was saved.', 'error');
-                redirect(url('admin/assignees'));
-            }
+            $r = save_grid('assignees', 'assignee', [
+                'first_name' => 'str',
+                'last_name'  => 'strnull',
+                'role_title' => 'strnull',
+                'is_active'  => 'bool',
+            ], (array) ($_POST['rows'] ?? []), ['first_name']);
 
             // `name` is the denormalised display name, so keep it in step.
             Database::run(
@@ -714,45 +686,34 @@ if ($method === 'POST') {
             }
             $full = trim($first . ' ' . $last);
 
-            $username = strtolower(post_str('username'));
-            if ($username !== '' && !preg_match('/^[a-z0-9._-]{3,60}$/', $username)) {
-                flash('Usernames may use letters, numbers, dots, dashes and underscores, and must be at least 3 characters.', 'error');
-                redirect(url('admin/assignees'));
-            }
-
             $pin = post_str('pin');
             if ($pin !== '' && !preg_match('/^[0-9]{6}$/', $pin)) {
                 flash('A PIN must be exactly 6 digits.', 'error');
                 redirect(url('admin/assignees'));
             }
-            if ($pin !== '' && $username === '') {
-                flash('A PIN is only usable with a username, so set one too.', 'error');
+            // Two people sharing a PIN would make sign-in ambiguous.
+            if ($pin !== '' && Auth::pinInUse($pin)) {
+                flash('That PIN is already in use. Pick a different one.', 'error');
                 redirect(url('admin/assignees'));
             }
 
-            try {
-                Database::run(
-                    'INSERT INTO assignees (first_name, last_name, name, username, pin_hash, role_title, is_active)
-                     VALUES (:first_name, :last_name, :name, :username, :pin_hash, :role_title, 1)',
-                    [
-                        'first_name' => $first,
-                        'last_name'  => $last,
-                        'name'       => $full,
-                        'username'   => $username !== '' ? $username : null,
-                        'pin_hash'   => $pin !== '' ? password_hash($pin, PASSWORD_DEFAULT) : null,
-                        'role_title' => post_str('role_title') ?: null,
-                    ]
-                );
-            } catch (PDOException $ex) {
-                flash('That username is already taken.', 'error');
-                redirect(url('admin/assignees'));
-            }
+            Database::run(
+                'INSERT INTO assignees (first_name, last_name, name, pin_hash, role_title, is_active)
+                 VALUES (:first_name, :last_name, :name, :pin_hash, :role_title, 1)',
+                [
+                    'first_name' => $first,
+                    'last_name'  => $last,
+                    'name'       => $full,
+                    'pin_hash'   => $pin !== '' ? password_hash($pin, PASSWORD_DEFAULT) : null,
+                    'role_title' => post_str('role_title') ?: null,
+                ]
+            );
 
             Activity::log('assignee', 'create', Database::lastId(), null, null, null, null, $full,
                 'Person added: ' . $full);
-            flash($username !== '' && $pin !== ''
-                ? $full . ' can now sign in with the username ' . $username . '.'
-                : $full . ' added. Give them a username and PIN to let them sign in.');
+            flash($pin !== ''
+                ? $full . ' can now sign in with that PIN.'
+                : $full . ' added. Give them a PIN to let them sign in.');
             redirect(url('admin/assignees'));
         }
 
@@ -769,8 +730,8 @@ if ($method === 'POST') {
                 flash('A PIN must be exactly 6 digits.', 'error');
                 redirect(url('admin/assignees'));
             }
-            if (empty($a['username'])) {
-                flash('Give ' . $a['name'] . ' a username first, otherwise there is nothing to sign in with.', 'error');
+            if (Auth::pinInUse($pin, $id)) {
+                flash('That PIN is already in use by someone else. Pick a different one.', 'error');
                 redirect(url('admin/assignees'));
             }
 
@@ -778,7 +739,7 @@ if ($method === 'POST') {
                 'h'  => password_hash($pin, PASSWORD_DEFAULT),
                 'id' => $id,
             ]);
-            // The PIN itself is never written anywhere, only its hash.
+            // Only the hash is written; the PIN itself is never stored.
             Activity::log('assignee', 'set_pin', $id, null, null, 'pin', null, null,
                 'PIN set for ' . $a['name']);
             flash('New PIN set for ' . $a['name'] . '. Tell them what it is; it cannot be looked up later.');
@@ -1148,11 +1109,7 @@ switch ($route) {
         if (Auth::isSignedIn()) {
             redirect(url('dashboard'));
         }
-        render('login', [
-            'error' => null,
-            'next'  => (string) ($_GET['next'] ?? ''),
-            'mode'  => ((string) ($_GET['mode'] ?? 'member')) === 'admin' ? 'admin' : 'member',
-        ]);
+        render('login', ['error' => null, 'next' => (string) ($_GET['next'] ?? '')]);
         break;
 
     case 'dashboard': {

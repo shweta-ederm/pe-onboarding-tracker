@@ -2,9 +2,9 @@
 /**
  * Admin: people, who are also the user accounts.
  *
- * A person with a username and a PIN can sign in. They see everything
- * and may change only the tasks assigned to them. PINs are stored
- * hashed, so they can be replaced but never read back.
+ * A person with a PIN can sign in with that PIN alone. They see
+ * everything and may change only the tasks assigned to them. PINs are
+ * stored hashed, so they can be replaced but never read back.
  *
  * @var array $rows
  */
@@ -14,8 +14,8 @@ $page_title = 'People';
   <div>
     <h1>People</h1>
     <p class="sub">
-      Everyone here can be assigned tasks. Give someone a username and a PIN and they can also
-      sign in, see everything, and update the tasks that are theirs.
+      Everyone here can be assigned tasks. Give someone a PIN and they can also sign in, see
+      everything, and update the tasks that are theirs.
     </p>
   </div>
 </div>
@@ -24,24 +24,21 @@ $page_title = 'People';
   <h2 class="card-h">Add a person</h2>
   <form method="post" action="<?= e(url('assignee-save')) ?>" class="row-form">
     <?= Csrf::field() ?>
-    <label class="field"><span>First name <abbr class="req" title="Required">*</abbr></span>
+    <label class="field f-grow"><span>First name <abbr class="req" title="Required">*</abbr></span>
       <input type="text" name="first_name" required maxlength="80"></label>
-    <label class="field"><span>Last name</span>
+    <label class="field f-grow"><span>Last name</span>
       <input type="text" name="last_name" maxlength="80"></label>
-    <label class="field"><span>Role</span>
+    <label class="field f-grow"><span>Role</span>
       <input type="text" name="role_title" maxlength="120" placeholder="e.g. Implementation"></label>
-    <label class="field"><span>Username</span>
-      <input type="text" name="username" maxlength="60" autocapitalize="none"
-             spellcheck="false" placeholder="e.g. jsmith"></label>
     <label class="field"><span>6-digit PIN</span>
       <input type="text" name="pin" maxlength="6" inputmode="numeric" pattern="[0-9]{6}"
-             placeholder="e.g. 481920" autocomplete="off"></label>
+             placeholder="481920" autocomplete="off"></label>
     <div class="form-actions">
       <button type="submit" class="btn btn-primary btn-sm">Add person</button>
     </div>
   </form>
   <p class="muted">
-    Leave username and PIN blank for somebody who should be assignable but not able to sign in.
+    Leave the PIN blank for somebody who should be assignable but not able to sign in.
   </p>
 </section>
 
@@ -50,7 +47,7 @@ $page_title = 'People';
 <div class="edit-rows cols-person" data-grid>
   <div class="edit-head">
     <span>First name</span><span>Last name</span><span>Role</span>
-    <span>Username</span><span class="ta-c">Sign-in</span><span class="ta-c">Active</span>
+    <span class="ta-c">Sign-in</span><span>Set a new PIN</span><span class="ta-c">Active</span>
   </div>
 
   <?php foreach ($rows as $r): $id = (int) $r['id']; ?>
@@ -68,19 +65,27 @@ $page_title = 'People';
           <input form="gridform" type="text" maxlength="120" name="rows[<?= $id ?>][role_title]"
                  value="<?= e($r['role_title'] ?? '') ?>"></label>
 
-        <label class="cell"><span class="cell-lab">Username</span>
-          <input form="gridform" type="text" maxlength="60" autocapitalize="none" spellcheck="false"
-                 name="rows[<?= $id ?>][username]" value="<?= e($r['username'] ?? '') ?>"></label>
-
         <span class="cell ta-c"><span class="cell-lab">Sign-in</span>
-          <?php if (!empty($r['username']) && !empty($r['pin_hash'])): ?>
+          <?php if (!empty($r['pin_hash'])): ?>
             <span class="badge st-completed" title="<?= $r['last_login']
                 ? 'Last signed in ' . e(fmt_ago($r['last_login'])) : 'Has never signed in' ?>">Yes</span>
-          <?php elseif (!empty($r['username'])): ?>
-            <span class="badge st-waiting" title="Has a username but no PIN">No PIN</span>
           <?php else: ?>
-            <span class="badge st-not-started" title="Assignable, but cannot sign in">None</span>
+            <span class="badge st-not-started" title="Assignable, but cannot sign in">No PIN</span>
           <?php endif; ?>
+        </span>
+
+        <?php /* Its own form, sitting in the grid so the column lines up.
+                 Kept separate from the grid form, so setting a PIN can
+                 never ride along with a Save by accident. */ ?>
+        <span class="cell"><span class="cell-lab">Set a new PIN</span>
+          <form method="post" action="<?= e(url('assignee-pin')) ?>" class="pin-form" data-leaves-page>
+            <?= Csrf::field() ?>
+            <input type="hidden" name="id" value="<?= $id ?>">
+            <input type="text" name="pin" maxlength="6" inputmode="numeric" pattern="[0-9]{6}"
+                   placeholder="6 digits" autocomplete="off"
+                   aria-label="New PIN for <?= e($r['name']) ?>">
+            <button type="submit" class="btn btn-quiet btn-xs">Set</button>
+          </form>
         </span>
 
         <label class="cell ta-c"><span class="cell-lab">Active</span>
@@ -90,16 +95,6 @@ $page_title = 'People';
       </div>
 
       <span class="edit-row-side">
-        <?php /* Its own form, so setting a PIN never rides along with a
-                 grid save and cannot be triggered by accident. */ ?>
-        <form method="post" action="<?= e(url('assignee-pin')) ?>" class="pin-form" data-leaves-page>
-          <?= Csrf::field() ?>
-          <input type="hidden" name="id" value="<?= $id ?>">
-          <input type="text" name="pin" maxlength="6" inputmode="numeric" pattern="[0-9]{6}"
-                 placeholder="New PIN" autocomplete="off" aria-label="New PIN for <?= e($r['name']) ?>">
-          <button type="submit" class="btn btn-quiet btn-xs">Set</button>
-        </form>
-
         <form method="post" action="<?= e(url('assignee-delete')) ?>" class="inline-form" data-leaves-page
               data-confirm="Remove <?= e($r['name']) ?>? If they hold assignments, they will be deactivated instead of deleted.">
           <?= Csrf::field() ?>
@@ -114,8 +109,9 @@ $page_title = 'People';
 <?php require APP_ROOT . '/templates/partials/savebar.php'; ?>
 
 <p class="table-note">
-  PINs are stored scrambled and cannot be read back, by you or by anyone else. If somebody forgets
-  theirs, type a new one in their row and tell them what it is. People cannot change their own PIN.
+  People sign in with their PIN alone, so every PIN has to be different. If you type one that is
+  already in use, it will be refused. PINs are stored scrambled and cannot be read back, by you or
+  anyone else, so if somebody forgets theirs, set a new one and tell them what it is.
 </p>
 <p class="table-note">
   Deactivating someone signs them out on their next click and removes them from the assignee
