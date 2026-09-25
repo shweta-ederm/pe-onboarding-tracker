@@ -17,10 +17,12 @@
 <title><?= e($page_title ?? 'Onboarding') ?> · <?= e($config['app_name']) ?></title>
 <link rel="stylesheet" href="<?= e(asset('assets/app.css')) ?>">
 </head>
-<body>
+<body class="<?= $template === 'login' ? 'auth-page' : '' ?>">
 
 <a class="skip-link" href="#main">Skip to content</a>
 
+<?php /* The top bar is hidden on the sign-in page: none of its links
+         lead anywhere until you are signed in. */ ?>
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="<?= e(url('dashboard')) ?>">

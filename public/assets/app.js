@@ -532,6 +532,23 @@
   }
 
   // ---------------------------------------------------------------
+  // Sign in: let people check what they typed
+  // ---------------------------------------------------------------
+
+  var pinPeek = document.querySelector('[data-pin-peek]');
+  if (pinPeek) {
+    pinPeek.addEventListener('click', function () {
+      var input = document.getElementById('pin');
+      if (!input) { return; }
+      var showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      pinPeek.textContent = showing ? 'Show' : 'Hide';
+      pinPeek.setAttribute('aria-label', showing ? 'Show PIN' : 'Hide PIN');
+      input.focus();
+    });
+  }
+
+  // ---------------------------------------------------------------
   // Confirmations on destructive forms
   // ---------------------------------------------------------------
 
